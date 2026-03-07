@@ -1333,6 +1333,7 @@ async function toggleModulePerm(email, examIds, grant) {
   try {
     await api('PUT', `/api/users/${encodeURIComponent(email)}/permissions`, { allowedExams: perms });
     student.allowedExams = perms;
+    student.allowed_exams = perms;
     // Refrescar la tabla para actualizar los toggles individuales
     renderStudentsTable(cachedStudents, cachedExams);
     toast(grant ? `✅ Módulo completo desbloqueado` : `🔒 Módulo completo bloqueado`, grant ? 'success' : 'info');
@@ -1413,10 +1414,16 @@ async function saveStudentEdit() {
     .map(e => e.id);
 
   try {
+    const student = cachedStudents.find(u => u.email === email);
     await Promise.all([
       api('PUT', `/api/users/${encodeURIComponent(email)}/section`, { section }),
       api('PUT', `/api/users/${encodeURIComponent(email)}/permissions`, { allowedExams: perms })
     ]);
+    if (student) {
+      student.section = section;
+      student.allowedExams = perms;
+      student.allowed_exams = perms;
+    }
     closeModal('modal-student');
     toast('Cambios guardados.', 'success');
     renderAdmin();
