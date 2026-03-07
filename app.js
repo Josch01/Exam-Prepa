@@ -296,8 +296,14 @@ async function api(method, endpoint, body) {
       const split = endpoint.split('/');
       const id = split[3];
       const action = split[4];
-      if (action === 'read') await supabaseClient.from('messages').update({ is_read: true }).eq('id', id);
-      if (action === 'archive') await supabaseClient.from('messages').update({ archived: true }).eq('id', id);
+      if (action === 'read') {
+        await supabaseClient.from('messages').update({ is_read: true }).eq('id', id);
+      }
+      if (action === 'archive') {
+        // body.archived can be true (archive) or false (unarchive/move back to inbox)
+        const archiveValue = body?.archived !== undefined ? body.archived : true;
+        await supabaseClient.from('messages').update({ archived: archiveValue }).eq('id', id);
+      }
       return { ok: true };
     }
     if (endpoint === '/api/messages/bulk' && method === 'DELETE') {
@@ -2539,7 +2545,7 @@ async function loadInbox() {
 
   try {
     const allMsgs = await api('GET', '/api/messages/inbox');
-    const msgs = allMsgs.filter(m => inboxView === 'archived' ? m.archived === 1 : !m.archived);
+    const msgs = allMsgs.filter(m => inboxView === 'archived' ? (m.archived === true || m.archived === 1) : (!m.archived));
     const msgDiv = document.getElementById('inbox-messages');
     const toolbar = document.getElementById('inbox-toolbar');
 
