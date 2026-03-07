@@ -300,6 +300,22 @@ async function api(method, endpoint, body) {
       if (action === 'archive') await supabaseClient.from('messages').update({ archived: true }).eq('id', id);
       return { ok: true };
     }
+    if (endpoint === '/api/messages/bulk' && method === 'DELETE') {
+      const { ids, all, archived } = body || {};
+      let q = supabaseClient.from('messages').delete().eq('to_email', email);
+      if (all) {
+        if (archived !== undefined) q = q.eq('archived', archived);
+      } else if (Array.isArray(ids) && ids.length) {
+        q = q.in('id', ids);
+      }
+      await q;
+      return { ok: true };
+    }
+    if (endpoint.startsWith('/api/messages/') && method === 'DELETE') {
+      const id = endpoint.split('/')[3];
+      await supabaseClient.from('messages').delete().eq('id', id).eq('to_email', email);
+      return { ok: true };
+    }
 
     // === ANALYTICS & LEADERBOARD ===
     if (endpoint === '/api/leaderboard' && method === 'GET') {
