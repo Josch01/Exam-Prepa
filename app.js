@@ -202,7 +202,13 @@ async function api(method, endpoint, body) {
     // === MATERIAL ===
     if (endpoint === '/api/material' && method === 'GET') {
       const { data } = await supabaseClient.from('material').select('*').order('sort_order', { ascending: true });
-      return data;
+      if (!isStudent) return data;
+      const allowed = currentUser.allowedExams || [];
+      const { data: exams } = await supabaseClient.from('exams').select('id, title');
+      const allowedTitles = new Set(
+        (exams || []).filter(e => allowed.includes(e.id)).map(e => e.title)
+      );
+      return data.filter(m => allowedTitles.has(m.title));
     }
     if (endpoint === '/api/material' && method === 'POST') {
       const id = 'mat-' + Date.now();
