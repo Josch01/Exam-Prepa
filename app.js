@@ -160,9 +160,12 @@ async function api(method, endpoint, body) {
       const { data: exams, error } = await supabaseClient.from('exams').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       if (isStudent) {
+        // Always re-fetch allowed_exams from DB to reflect any admin changes
+        const { data: profile } = await supabaseClient.from('profiles').select('allowed_exams').eq('email', email).single();
+        const freshAllowed = profile?.allowed_exams || [];
         const { data: logs } = await supabaseClient.from('logs').select('exam_id').eq('student_email', email);
         return exams.map(e => {
-          e.allowed = (currentUser.allowedExams || []).includes(e.id);
+          e.allowed = freshAllowed.includes(e.id);
           e.attempts_used = logs.filter(l => l.exam_id === e.id).length;
           return e;
         });
@@ -174,9 +177,12 @@ async function api(method, endpoint, body) {
       const { data: exam, error } = await supabaseClient.from('exams').select('*').eq('id', id).single();
       if (error) throw error;
       if (isStudent) {
+        // Always re-fetch allowed_exams from DB
+        const { data: profile } = await supabaseClient.from('profiles').select('allowed_exams').eq('email', email).single();
+        const freshAllowed = profile?.allowed_exams || [];
         const { count } = await supabaseClient.from('logs').select('*', { count: 'exact', head: true }).eq('student_email', email).eq('exam_id', id);
         exam.attempts_used = count || 0;
-        exam.allowed = (currentUser.allowedExams || []).includes(id);
+        exam.allowed = freshAllowed.includes(id);
       }
       return exam;
     }
