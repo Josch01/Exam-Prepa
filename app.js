@@ -130,15 +130,26 @@ async function api(method, endpoint, body) {
     }
     if (endpoint.startsWith('/api/users/') && method === 'PUT') {
       const split = endpoint.split('/');
-      const targetEmail = split[3];
+      const targetEmail = decodeURIComponent(split[3]);
       const action = split[4];
-      if (action === 'role') await supabaseClient.from('profiles').update({ role: body.role }).eq('email', targetEmail);
-      if (action === 'section') await supabaseClient.from('profiles').update({ section: body.section }).eq('email', targetEmail);
-      if (action === 'permissions') await supabaseClient.from('profiles').update({ allowed_exams: body.allowedExams }).eq('email', targetEmail);
+      let err = null;
+      if (action === 'role') {
+        const { error } = await supabaseClient.from('profiles').update({ role: body.role }).eq('email', targetEmail);
+        err = error;
+      }
+      if (action === 'section') {
+        const { error } = await supabaseClient.from('profiles').update({ section: body.section }).eq('email', targetEmail);
+        err = error;
+      }
+      if (action === 'permissions') {
+        const { error } = await supabaseClient.from('profiles').update({ allowed_exams: body.allowedExams }).eq('email', targetEmail);
+        err = error;
+      }
+      if (err) throw err;
       return { ok: true };
     }
     if (endpoint.startsWith('/api/users/') && method === 'DELETE') {
-      const targetEmail = endpoint.split('/')[3];
+      const targetEmail = decodeURIComponent(endpoint.split('/')[3]);
       await supabaseClient.from('profiles').delete().eq('email', targetEmail);
       await supabaseClient.from('logs').delete().eq('student_email', targetEmail);
       return { ok: true };
