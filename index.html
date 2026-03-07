@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ExamApp — Plataforma de Exámenes</title>
+  <meta name="description" content="Plataforma educativa para creación y gestión de exámenes en línea." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- KaTeX for LaTeX Math Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <!-- Chart.js for Analytics -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+  <!-- Decoración de fondo -->
+  <div class="bg-blob bg-blob-1"></div>
+  <div class="bg-blob bg-blob-2"></div>
+  <div class="bg-blob bg-blob-3"></div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <div id="app">
+
+    <!-- ======================== VISTA: AUTENTICACIÓN ======================== -->
+    <div class="view" id="view-auth">
+      <div class="auth-container">
+        <div class="auth-logo">
+          <div class="logo-icon">🎓</div>
+          <h1>Exam<span>App</span></h1>
+          <p>Plataforma de Exámenes Educativos</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Iniciar Sesión</button>
+          <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
+        </div>
+
+        <!-- LOGIN -->
+        <div id="form-login" class="card auth-form">
+          <div class="form-group">
+            <label class="form-label">Correo electrónico</label>
+            <input class="form-input" type="email" id="login-email" placeholder="correo@ejemplo.com"
+              autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <input class="form-input" type="password" id="login-password" placeholder="••••••••"
+              autocomplete="current-password" />
+          </div>
+          <div id="login-error" class="auth-error hidden"></div>
+          <button class="btn btn-primary btn-lg w-full" onclick="handleLogin()">Entrar →</button>
+          <p class="auth-notice">¿No tienes cuenta? Regístrate arriba.</p>
+        </div>
+
+        <!-- REGISTER -->
+        <div id="form-register" class="card auth-form hidden">
+          <div class="form-group">
+            <label class="form-label">Nombre completo</label>
+            <input class="form-input" type="text" id="reg-name" placeholder="Tu nombre completo" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Correo electrónico</label>
+            <input class="form-input" type="email" id="reg-email" placeholder="correo@ejemplo.com"
+              autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <input class="form-input" type="password" id="reg-password" placeholder="Mínimo 6 caracteres"
+              autocomplete="new-password" />
+          </div>
+          <div id="reg-error" class="auth-error hidden"></div>
+          <button class="btn btn-secondary btn-lg w-full" onclick="handleRegister()">Crear cuenta</button>
+          <p class="auth-notice">Al registrarte, el administrador te asignará sección y permisos.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================== VISTA: ALUMNO ======================== -->
+    <div class="view" id="view-student">
+      <!-- Navbar -->
+      <nav class="navbar">
+        <a class="navbar-logo" onclick="goHome()" href="#">
+          <div class="logo-icon">🎓</div>
+          <span class="logo-text">Exam<span>App</span></span>
+        </a>
+        <div class="navbar-info">
+          <div class="user-badge">
+            <div class="user-avatar" id="student-avatar-sm"></div>
+            <span id="student-name-sm">Alumno</span>
+          </div>
+          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"
+            id="theme-btn-student">☀️</button>
+          <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
+        </div>
+      </nav>
+
+      <!-- Botón flotante de mensajes -->
+      <button class="fab-msg" id="fab-msg-btn" onclick="openComposeModal()" title="Mensaje / Sugerencia">
+        💬
+        <span class="fab-pulse"></span>
+      </button>
+
+      <div class="student-body">
+        <!-- Perfil -->
+        <div class="profile-hero">
+          <div class="profile-avatar-big" id="student-avatar-big"></div>
+          <div class="profile-info">
+            <h2 id="student-display-name">Nombre del Alumno</h2>
+            <p id="student-display-email">correo@ejemplo.com</p>
+            <div class="profile-tags">
+              <span class="tag tag-section" id="student-display-section">Sin sección</span>
+            </div>
+            <div class="profile-actions">
+              <button class="btn btn-ghost btn-sm" onclick="openHistoryModal()">📊 Mi Historial</button>
+              <button class="btn btn-ghost btn-sm" onclick="openLeaderboardModal()">🏆 Ranking</button>
+              <button class="btn btn-ghost btn-sm" onclick="openChangePasswordModal()">🔑 Cambiar contraseña</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anuncios -->
+        <div id="announcements-section"></div>
+
+        <!-- Material de estudio -->
+        <div id="material-section" style="display:none;">
+          <h2 class="section-title" style="margin-top:0;">Material de Estudio 📚</h2>
+          <div id="material-grid" class="material-grid"></div>
+        </div>
+
+        <!-- Exámenes -->
+        <h2 class="section-title">Mis Exámenes</h2>
+        <div class="exams-grid" id="exams-grid">
+          <!-- generado dinámicamente -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================== VISTA: EXAMEN ======================== -->
+    <div class="view" id="view-exam">
+      <nav class="navbar">
+        <a class="navbar-logo" onclick="goHome()" href="#">
+          <div class="logo-icon">🎓</div>
+          <span class="logo-text">Exam<span>App</span></span>
+        </a>
+        <div class="navbar-info">
+          <span id="exam-nav-title" style="font-weight:700;font-size:0.95rem;"></span>
+          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()">☀️</button>
+        </div>
+      </nav>
+
+      <div class="exam-body">
+        <!-- Contenedor de pregunta -->
+        <div id="exam-question-view">
+          <div class="exam-progress-bar-outer">
+            <div class="exam-progress-bar-inner" id="exam-progress-bar"></div>
+          </div>
+          <div class="exam-header-info">
+            <span class="exam-counter" id="exam-counter"></span>
+            <span class="exam-timer-badge hidden" id="exam-timer">⏱️ --:--</span>
+            <span class="exam-flagged-badge hidden" id="exam-flagged-count">🔖 0 pendientes</span>
+            <span class="exam-counter" id="exam-score-live">✅ 0 / ❌ 0</span>
+          </div>
+          <div class="exam-question-card">
+            <div class="exam-question-num" id="question-num-label"></div>
+            <div class="exam-question-text" id="question-text"></div>
+            <div class="options-list" id="options-list"></div>
+            <div id="feedback-box" class="hidden"></div>
+          </div>
+          <div class="exam-actions">
+            <button class="btn btn-ghost" id="btn-skip" onclick="skipQuestion()" style="display:none;">🔖 Saltar
+            </button>
+            <button class="btn btn-primary" id="btn-next" onclick="nextQuestion()">Siguiente →</button>
+          </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="exam-results-view" class="hidden">
+          <div class="results-card" id="results-card">
+            <div class="results-emoji" id="results-emoji"></div>
+            <div class="circular-progress" id="circular-progress-container">
+              <svg viewBox="0 0 160 160" width="160" height="160">
+                <circle class="circular-bg" cx="80" cy="80" r="68" />
+                <circle class="circular-fill" id="circular-fill" cx="80" cy="80" r="68" stroke-dasharray="427.26"
+                  stroke-dashoffset="427.26" />
+              </svg>
+              <div class="circular-text">
+                <div class="circular-pct" id="result-pct">0%</div>
+                <div class="circular-label">PUNTAJE</div>
+              </div>
+            </div>
+            <h2 class="results-title" id="results-title"></h2>
+            <p class="results-subtitle" id="results-subtitle"></p>
+            <div class="results-stats">
+              <div class="stat-item">
+                <div class="stat-value" id="res-correct" style="color:var(--secondary)">0</div>
+                <div class="stat-label">✅ Correctas</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value" id="res-wrong" style="color:var(--danger)">0</div>
+                <div class="stat-label">❌ Incorrectas</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value" id="res-total" style="color:var(--primary-light)">0</div>
+                <div class="stat-label">📋 Total</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+            <button class="btn btn-ghost" onclick="toggleReview()">🔍 Revisar respuestas</button>
+            <button class="btn btn-outline" onclick="retakeExam()">&#x1F504; Intentar de nuevo</button>
+            <button class="btn btn-primary" onclick="goHome()">🏠 Volver al inicio</button>
+          </div>
+          <!-- Revisión de preguntas -->
+          <div id="review-section" class="hidden" style="margin-top:1.5rem;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================== VISTA: ADMINISTRADOR ======================== -->
+    <div class="view" id="view-admin">
+      <nav class="navbar">
+        <a class="navbar-logo" onclick="goHome()" href="#">
+          <div class="logo-icon">🎓</div>
+          <span class="logo-text">Exam<span>App</span></span>
+        </a>
+        <div class="navbar-info">
+          <div class="user-badge">
+            <div class="user-avatar" id="admin-avatar">👑</div>
+            <div style="display:flex;flex-direction:column;line-height:1.2;">
+              <span id="admin-role-label" style="font-size:0.72rem;color:var(--text-muted);">Administrador</span>
+              <span id="admin-name-label" style="font-size:0.88rem;font-weight:700;"></span>
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm" title="Cambiar contraseña"
+            onclick="openChangePasswordModal()">🔑</button>
+          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()">☀️</button>
+          <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
+        </div>
+      </nav>
+
+      <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+          <div class="sidebar-section">Panel</div>
+          <nav class="sidebar-nav">
+            <button class="sidebar-item active" id="nav-overview" onclick="showPanel('overview')">
+              <span class="sidebar-icon">📊</span> Resumen
+            </button>
+            <button class="sidebar-item" id="nav-analytics" onclick="showPanel('analytics')">
+              <span class="sidebar-icon">📈</span> Analíticas
+            </button>
+            <div class="sidebar-section">Gestión</div>
+            <button class="sidebar-item" id="nav-students" onclick="showPanel('students')">
+              <span class="sidebar-icon">👥</span> Alumnos
+            </button>
+            <button class="sidebar-item" id="nav-exams" onclick="showPanel('exams')">
+              <span class="sidebar-icon">📝</span> Exámenes
+            </button>
+            <button class="sidebar-item" id="nav-material" onclick="showPanel('material')">
+              <span class="sidebar-icon">📚</span> Material
+            </button>
+            <button class="sidebar-item" id="nav-announcements" onclick="showPanel('announcements')">
+              <span class="sidebar-icon">📢</span> Anuncios
+            </button>
+            <button class="sidebar-item" id="nav-messages" onclick="showPanel('messages');loadInbox()">
+              <span class="sidebar-icon">📬</span> Mensajes
+              <span class="msg-badge hidden" id="msg-badge">0</span>
+            </button>
+          </nav>
+        </aside>
+
+        <!-- Main content -->
+        <main class="admin-main">
+
+          <!-- Panel: Resumen -->
+          <div class="admin-panel active" id="panel-overview">
+            <h1 class="section-title" style="margin-bottom:1.5rem;">Resumen general</h1>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📊 Descargar CSV</button>
+            </div>
+            <div class="stats-grid" id="admin-stats"></div>
+            <h2 class="section-title">Actividad reciente</h2>
+            <div class="card">
+              <div id="recent-activity" style="color:var(--text-muted);font-size:0.9rem;"></div>
+            </div>
+          </div>
+
+          <!-- Panel: Analíticas -->
+          <div class="admin-panel" id="panel-analytics">
+            <h1 class="section-title" style="margin-bottom:1.5rem;">📈 Analíticas de rendimiento</h1>
+            <div class="form-group" style="max-width:300px;margin-bottom:1.5rem;">
+              <label class="form-label">Filtrar por examen</label>
+              <select class="form-input" id="analytics-exam-filter" onchange="renderAnalytics()">
+                <option value="">Todos los exámenes</option>
+              </select>
+            </div>
+            <div class="analytics-grid">
+              <div class="analytics-card">
+                <h3 class="analytics-card-title">Promedio por examen</h3>
+                <canvas id="chart-avg-exam"></canvas>
+              </div>
+              <div class="analytics-card">
+                <h3 class="analytics-card-title">Distribución de rendimiento</h3>
+                <canvas id="chart-distribution"></canvas>
+              </div>
+              <div class="analytics-card">
+                <h3 class="analytics-card-title">Intentos por día</h3>
+                <canvas id="chart-timeline"></canvas>
+              </div>
+              <div class="analytics-card">
+                <h3 class="analytics-card-title">❓ Top preguntas más difíciles</h3>
+                <div id="hardest-questions-table" style="overflow-x:auto;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel: Alumnos -->
+          <div class="admin-panel" id="panel-students">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
+              <h1 class="section-title" style="margin-bottom:0;">Alumnos registrados</h1>
+            </div>
+
+            <!-- Barra de filtros -->
+            <div class="filter-bar">
+              <div class="filter-search-wrap">
+                <span class="filter-icon">🔍</span>
+                <input class="form-input" type="text" id="filter-search" placeholder="Buscar por nombre o correo..."
+                  oninput="applyStudentFilters()" />
+              </div>
+              <select class="form-input filter-select" id="filter-section" onchange="applyStudentFilters()">
+                <option value="">Todas las secciones</option>
+              </select>
+              <select class="form-input filter-select" id="filter-role" onchange="applyStudentFilters()">
+                <option value="">Todos los roles</option>
+                <option value="student">👤 Alumnos</option>
+                <option value="admin">👨‍🏫 Profesores</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" onclick="renderAdmin()" title="Refrescar">🔄</button>
+            </div>
+
+            <div class="table-wrapper">
+              <table id="students-table">
+                <thead>
+                  <tr>
+                    <th>Nombre / Correo</th>
+                    <th>Rol</th>
+                    <th>Sección</th>
+                    <th>Permisos de examen</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="students-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Panel: Exámenes -->
+          <div class="admin-panel" id="panel-exams">
+            <div
+              style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.7rem;">
+              <h1 class="section-title" style="margin-bottom:0;">Exámenes</h1>
+              <div style="display:flex;gap:0.7rem;">
+                <button class="btn btn-ghost" onclick="openLatexModal()">📥 Importar LaTeX</button>
+                <button class="btn btn-primary" onclick="openCreateExamModal()">+ Nuevo examen</button>
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table id="exams-table">
+                <thead>
+                  <tr>
+                    <th>Título</th>
+                    <th>Descripción</th>
+                    <th>Preguntas</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="exams-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Panel: Material -->
+          <div class="admin-panel" id="panel-material">
+            <div
+              style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.7rem;">
+              <h1 class="section-title" style="margin-bottom:0;">Material de Estudio</h1>
+              <button class="btn btn-primary" onclick="openAddMaterialModal()">+ Agregar material</button>
+            </div>
+            <p style="color:var(--text-muted);font-size:0.86rem;margin-bottom:1.2rem;">
+              💡 El <strong>Título</strong> debe coincidir exactamente con el título del exámen para que el alumno vea
+              el material cuando tenga permiso. No es necesario que el exámen exista primero.
+            </p>
+            <div class="table-wrapper">
+              <table id="material-table">
+                <thead>
+                  <tr>
+                    <th>Módulo (Título)</th>
+                    <th>Nombre del archivo</th>
+                    <th style="width:35%">Link de Drive</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="material-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Panel: Anuncios -->
+          <div class="admin-panel" id="panel-announcements">
+            <div
+              style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.7rem;">
+              <h1 class="section-title" style="margin-bottom:0;">Tablero de Anuncios</h1>
+              <button class="btn btn-primary" onclick="openAddAnnouncementModal()">+ Nuevo anuncio</button>
+            </div>
+            <div class="table-wrapper">
+              <table id="announcements-table">
+                <thead>
+                  <tr>
+                    <th>Título</th>
+                    <th>Contenido</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="announcements-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ===== Panel: Mensajes ===== -->
+          <div class="admin-panel" id="panel-messages">
+            <h1 class="section-title" style="margin-bottom:1.2rem;">📬 Bandeja de entrada</h1>
+            <div id="inbox-list">
+              <p style="color:var(--text-muted);text-align:center;padding:2rem;">Cargando...</p>
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </div>
+
+  </div><!-- #app -->
+
+  <!-- ======================== MODAL: CREAR/EDITAR EXAMEN ======================== -->
+  <div class="modal-overlay hidden" id="modal-exam">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-exam-title">Nuevo examen</span>
+        <button class="modal-close" onclick="closeModal('modal-exam')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Título del examen</label>
+          <input class="form-input" type="text" id="exam-title-input" placeholder="Ej: Álgebra — Unidad 1" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descripción</label>
+          <input class="form-input" type="text" id="exam-desc-input" placeholder="Breve descripción del examen" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ícono (emoji)</label>
+          <input class="form-input" type="text" id="exam-icon-input" placeholder="📚" maxlength="4"
+            style="width:80px;text-align:center;font-size:1.4rem;" />
+        </div>
+
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+          <div class="form-group" style="flex:1;min-width:120px;">
+            <label class="form-label">Máx. intentos <span style="color:var(--text-muted);font-size:0.76rem;">(0 =
+                ilimitado)</span></label>
+            <input class="form-input" type="number" id="exam-max-attempts" min="0" value="0" style="width:90px;" />
+          </div>
+          <div class="form-group" style="flex:1;min-width:120px;">
+            <label class="form-label">⏱️ Tiempo límite <span style="color:var(--text-muted);font-size:0.76rem;">(min, 0
+                = sin límite)</span></label>
+            <input class="form-input" type="number" id="exam-time-limit" min="0" value="0" style="width:90px;" />
+          </div>
+          <div class="form-group" style="flex:1;display:flex;align-items:center;gap:0.6rem;padding-top:1.6rem;">
+            <input type="checkbox" id="exam-shuffle" style="width:18px;height:18px;accent-color:var(--primary);" />
+            <label for="exam-shuffle" class="form-label" style="margin:0;cursor:pointer;">Mezclar preguntas</label>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem;">
+          <label class="form-label" style="margin:0;">Preguntas</label>
+          <button class="btn btn-ghost btn-sm" onclick="addQuestionBlock()">+ Pregunta</button>
+        </div>
+        <div id="questions-builder" style="display:flex;flex-direction:column;gap:1rem;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-exam')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveExam()">💾 Guardar examen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: EDITAR ALUMNO ======================== -->
+  <div class="modal-overlay hidden" id="modal-student">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Editar alumno</span>
+        <button class="modal-close" onclick="closeModal('modal-student')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-student-email" />
+        <div class="form-group">
+          <label class="form-label">Nombre</label>
+          <input class="form-input" type="text" id="edit-student-name" readonly style="opacity:0.6;cursor:default;" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sección</label>
+          <input class="form-input" type="text" id="edit-student-section" placeholder="Ej: 3A, Grupo 2..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Permisos de examen</label>
+          <div id="edit-perms-list" style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.4rem;"></div>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.5rem;">Activa los exámenes que el alumno
+            puede realizar.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-student')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveStudentEdit()">💾 Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ======================== MODAL: IMPORTAR LATEX ======================== -->
+  <div class="modal-overlay hidden" id="modal-latex">
+    <div class="modal" style="max-width:700px;">
+      <div class="modal-header">
+        <span class="modal-title">📥 Importar preguntas desde LaTeX</span>
+        <button class="modal-close" onclick="closeModal('modal-latex')">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="latex-tip">
+          <strong>💡 ¿Cómo funciona?</strong> Pega tus preguntas en formato LaTeX, opcionalmente las respuestas, y haz
+          clic en
+          <em>Importar</em>. Se abrirá el editor de exámenes con todo precargado.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Preguntas (LaTeX) <span style="color:var(--danger);">*</span></label>
+          <textarea class="form-input latex-textarea" id="latex-questions" placeholder="Pega aquí las preguntas. Ejemplo:
+\item ¿Cuál es la capital de México?
+\begin{enumerate}[label=\Alph*)]
+    \item Guadalajara
+    \item Ciudad de México
+    \item Monterrey
+    \item Puebla
+\end{enumerate}
+
+\item Siguiente pregunta..." oninput="updateLatexPreview()"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Respuestas (opcional)</label>
+          <textarea class="form-input latex-textarea latex-textarea-sm" id="latex-answers" placeholder="Pega aquí las respuestas si las tienes. Ejemplo:
+\begin{itemize}
+    \item 1. B
+    \item 2. C
+    \item 3. A
+\end{itemize}" oninput="updateLatexPreview()"></textarea>
+        </div>
+
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Justificaciones (opcional)</label>
+        <textarea class="form-input latex-textarea latex-textarea-sm" id="latex-justifications" placeholder="Pega aquí la justificación numerada de cada respuesta. Ejemplo:
+1. El artículo 3° constitucional establece que la educación será laica y gratuita.
+2. La segunda ley de Newton define F = ma, por lo que la opción C es correcta.
+3. Por definición, los gases ideales..."></textarea>
+      </div>
+
+      <div id="latex-preview-info"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-latex')">Cancelar</button>
+      <button class="btn btn-primary" onclick="importLatex()">📥 Importar y editar</button>
+    </div>
+  </div>
+  </div>
+
+  <!-- ======================== MODAL: AGREGAR/EDITAR MATERIAL ======================== -->
+  <div class="modal-overlay hidden" id="modal-material">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-material-title">Agregar material</span>
+        <button class="modal-close" onclick="closeModal('modal-material')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="mat-edit-id" />
+        <div class="form-group">
+          <label class="form-label">Título del módulo <span style="color:var(--danger)">*</span></label>
+          <input class="form-input" type="text" id="mat-title" placeholder="Ej: Módulo 11" />
+          <p style="font-size:0.76rem;color:var(--text-muted);margin-top:0.3rem;">Usa el mismo título que el examen para
+            que el permiso lo desbloquee automáticamente.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre del archivo <span style="color:var(--danger)">*</span></label>
+          <input class="form-input" type="text" id="mat-filename"
+            placeholder="Ej: Unidad 1 — Fundamentos de Geopolítica" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Link de Google Drive <span style="color:var(--danger)">*</span></label>
+          <input class="form-input" type="url" id="mat-link" placeholder="https://drive.google.com/file/d/.../view" />
+          <p style="font-size:0.76rem;color:var(--text-muted);margin-top:0.3rem;">El archivo debe ser público en Drive:
+            <em>Cualquiera con el link puede ver</em>.
+          </p>
+        </div>
+        <div style="display:flex;gap:1rem;">
+          <div class="form-group" style="flex:0 0 80px;">
+            <label class="form-label">Ícono</label>
+            <input class="form-input" type="text" id="mat-icon" value="📄" maxlength="4"
+              style="text-align:center;font-size:1.3rem;" />
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Orden (dentro del módulo)</label>
+            <input class="form-input" type="number" id="mat-order" value="0" min="0" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-material')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveMaterial()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: MI HISTORIAL ======================== -->
+  <div class="modal-overlay hidden" id="modal-history">
+    <div class="modal" style="max-width:600px;">
+      <div class="modal-header">
+        <span class="modal-title">📊 Mi Historial de Intentos</span>
+        <button class="modal-close" onclick="closeModal('modal-history')">✕</button>
+      </div>
+      <div class="modal-body" id="history-modal-body" style="max-height:460px;overflow-y:auto;"></div>
+      <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('modal-history')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: RANKING ======================== -->
+  <div class="modal-overlay hidden" id="modal-leaderboard">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <span class="modal-title">🏆 Ranking del Grupo</span>
+        <button class="modal-close" onclick="closeModal('modal-leaderboard')">✕</button>
+      </div>
+      <div class="modal-body" id="leaderboard-modal-body" style="max-height:460px;overflow-y:auto;"></div>
+      <div class="modal-footer"><button class="btn btn-primary"
+          onclick="closeModal('modal-leaderboard')">Cerrar</button></div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: CAMBIAR CONTRASEÑA ======================== -->
+  <div class="modal-overlay hidden" id="modal-change-pw">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <span class="modal-title">🔑 Cambiar Contraseña</span>
+        <button class="modal-close" onclick="closeModal('modal-change-pw')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Contraseña actual</label>
+          <input class="form-input" type="password" id="pw-current" placeholder="Tu contraseña actual" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nueva contraseña</label>
+          <input class="form-input" type="password" id="pw-new" placeholder="Mínimo 6 caracteres" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirmar nueva contraseña</label>
+          <input class="form-input" type="password" id="pw-confirm" placeholder="Repite la nueva contraseña" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-change-pw')">Cancelar</button>
+        <button class="btn btn-primary" onclick="changePassword()">💾 Cambiar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: ANUNCIO ======================== -->
+  <div class="modal-overlay hidden" id="modal-announcement">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-ann-title">Nuevo anuncio</span>
+        <button class="modal-close" onclick="closeModal('modal-announcement')">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ann-edit-id" />
+        <div class="form-group">
+          <label class="form-label">Título <span style="color:var(--danger)">*</span></label>
+          <input class="form-input" type="text" id="ann-title" placeholder="Ej: Recordatorio — Examen del Módulo 3" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contenido</label>
+          <textarea class="form-input" id="ann-content" rows="3" style="resize:vertical;"
+            placeholder="Detalles del anuncio..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">🔗 Link (Google Drive, PDF, sitio web…)</label>
+          <input class="form-input" type="url" id="ann-link" placeholder="https://drive.google.com/file/d/.../view" />
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem;">Los alumnos verán un botón para abrir
+            este enlace.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">🖼️ URL de imagen de banner (opcional)</label>
+          <input class="form-input" type="url" id="ann-image"
+            placeholder="https://i.imgur.com/... ó link directo de imagen" />
+          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem;">Pega la URL de una imagen. Click =
+            zoom completo para los alumnos.</p>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:0.6rem;">
+          <input type="checkbox" id="ann-active" checked
+            style="width:18px;height:18px;accent-color:var(--secondary);" />
+          <label for="ann-active" class="form-label" style="margin:0;cursor:pointer;">Visible para alumnos</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-announcement')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveAnnouncement()">&#x1F4BE; Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: LIGHTBOX IMAGEN ======================== -->
+  <div class="modal-overlay hidden" id="modal-lightbox" onclick="closeModal('modal-lightbox')"
+    style="background:rgba(0,0,0,0.92);cursor:zoom-out;">
+    <div style="max-width:92vw;max-height:92vh;position:relative;">
+      <img id="lightbox-img" src="" alt="Banner"
+        style="max-width:100%;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.8);display:block;" />
+      <button onclick="closeModal('modal-lightbox')"
+        style="position:absolute;top:-14px;right:-14px;background:var(--danger);border:none;color:#fff;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">&#x2715;</button>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: COMPONER MENSAJE ======================== -->
+  <div class="modal-overlay hidden" id="modal-compose">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <span class="modal-title" id="compose-title">&#x1F4AC; Enviar mensaje</span>
+        <button class="modal-close" onclick="closeModal('modal-compose')">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Tabs: Mensaje o Sugerencia -->
+        <div class="compose-tabs">
+          <button class="compose-tab active" id="tab-msg" onclick="setComposeMode('message')">&#x1F464; Mensaje a
+            profesor</button>
+          <button class="compose-tab" id="tab-sug" onclick="setComposeMode('suggestion')">&#x1F4A1; Sugerencia</button>
+        </div>
+
+        <!-- Selector de destinatario (solo en modo mensaje) -->
+        <div class="form-group" id="compose-recipient-group">
+          <label class="form-label">Destinatario <span style="color:var(--danger)">*</span></label>
+          <select class="form-input" id="compose-to">
+            <option value="">Cargando profesores...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Asunto</label>
+          <input class="form-input" type="text" id="compose-subject"
+            placeholder="Ej: Duda sobre el examen del m&#xF3;dulo 3" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mensaje <span style="color:var(--danger)">*</span></label>
+          <textarea class="form-input" id="compose-body" rows="5" style="resize:vertical;"
+            placeholder="Escribe tu mensaje aqu&#xED;..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modal-compose')">Cancelar</button>
+        <button class="btn btn-primary" onclick="sendMessage()">&#x1F4E8; Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MODAL: VER MENSAJE ======================== -->
+  <div class="modal-overlay hidden" id="modal-msg-detail">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <span class="modal-title" id="msg-detail-subject">Mensaje</span>
+        <button class="modal-close" onclick="closeModal('modal-msg-detail')">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div id="msg-detail-meta" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.8rem;"></div>
+        <div id="msg-detail-body" style="line-height:1.7;white-space:pre-wrap;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="closeModal('modal-msg-detail')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=8"></script>
+</body>
+
+</html>
