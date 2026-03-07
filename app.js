@@ -274,8 +274,14 @@ async function api(method, endpoint, body) {
     if (endpoint.startsWith('/api/messages/') && method === 'GET') {
       const type = endpoint.split('/')[3];
       if (type === 'inbox') {
-        const { data } = await supabaseClient.from('messages').select('*, profiles:from_email(name, section)').eq('to_email', email).order('created_at', { ascending: false });
-        return data.map(m => ({ ...m, from_name: m.profiles?.name, from_section: m.profiles?.section }));
+        const { data: msgs } = await supabaseClient.from('messages').select('*').eq('to_email', email).order('created_at', { ascending: false });
+        if (!msgs || msgs.length === 0) return [];
+        // Enrich with sender profile info
+        const senderEmails = [...new Set(msgs.map(m => m.from_email))];
+        const { data: profiles } = await supabaseClient.from('profiles').select('name, section, email').in('email', senderEmails);
+        const profileMap = {};
+        (profiles || []).forEach(p => { profileMap[p.email] = p; });
+        return msgs.map(m => ({ ...m, from_name: profileMap[m.from_email]?.name || m.from_email, from_section: profileMap[m.from_email]?.section || '' }));
       }
       if (type === 'unread') {
         const { count } = await supabaseClient.from('messages').select('*', { count: 'exact', head: true }).eq('to_email', email).eq('is_read', false).eq('archived', false);
