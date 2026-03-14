@@ -2733,7 +2733,8 @@ function stopMessagePolling() {
 // ============================================================
 
 // ── Estado del quiz ──────────────────────────────────────────
-let lqChannel = null;        // canal Supabase Realtime
+let lqChannel = null;        // canal Supabase Realtime (ADMIN/HOST)
+let slqChannel = null;       // canal Supabase Realtime (ALUMNO) — separado para evitar conflictos
 let lqSessionCode = '';      // código de 6 letras
 let lqQuestions = [];        // preguntas parseadas
 let lqCurrentQ = 0;          // índice de pregunta actual
@@ -2990,18 +2991,18 @@ function lqReset() {
   if (preview) preview.innerHTML = '';
 }
 
-// ── ALUMNO: Mostrar sección de quiz en vivo ──────────────────
+// ── ALUMNO: Abrir modal de quiz en vivo ────────────────────
 function showStudentLiveSection() {
-  // Toggle: si ya está visible, ocultarla
-  const sec = document.getElementById('student-live-section');
-  if (!sec.classList.contains('hidden')) {
-    sec.classList.add('hidden');
-    return;
-  }
-  sec.classList.remove('hidden');
+  const modal = document.getElementById('slq-modal-overlay');
+  if (!modal) return;
+  modal.classList.remove('hidden');
   slqShow('slq-join');
-  // Scroll suave hacia abajo
-  sec.scrollIntoView({ behavior: 'smooth' });
+  document.getElementById('slq-code-input').value = '';
+}
+
+function slqCloseModal() {
+  const modal = document.getElementById('slq-modal-overlay');
+  if (modal) modal.classList.add('hidden');
 }
 
 // ── ALUMNO: Unirse a sala ────────────────────────────────────
@@ -3013,18 +3014,18 @@ async function slqJoin() {
   const myName = currentUser?.name || currentUser?.email || 'Alumno';
   const myEmail = currentUser?.email || 'anon';
 
-  // Suscribirse al canal
-  if (lqChannel) { supabaseClient.removeChannel(lqChannel); }
-  lqChannel = supabaseClient.channel(`quiz-${code}`, { config: { broadcast: { self: false } } });
+  // Suscribirse al canal — USAR slqChannel, NO lqChannel
+  if (slqChannel) { supabaseClient.removeChannel(slqChannel); slqChannel = null; }
+  slqChannel = supabaseClient.channel(`quiz-${code}`, { config: { broadcast: { self: false, ack: false } } });
 
   // Responder a bienvenida
-  lqChannel.on('broadcast', { event: 'welcome' }, () => {
+  slqChannel.on('broadcast', { event: 'welcome' }, () => {
     document.getElementById('slq-room-display').textContent = code;
     slqShow('slq-waiting');
   });
 
   // Recibir pregunta
-  lqChannel.on('broadcast', { event: 'question' }, ({ payload }) => {
+  slqChannel.on('broadcast', { event: 'question' }, ({ payload }) => {
     slqAnswered = false;
     slqShow('slq-question');
     document.getElementById('slq-q-num').textContent = `Pregunta ${payload.idx + 1} de ${payload.total}`;
@@ -3052,7 +3053,7 @@ async function slqJoin() {
   });
 
   // Recibir resultado de respuesta
-  lqChannel.on('broadcast', { event: 'answer_result' }, ({ payload }) => {
+  slqChannel.on('broadcast', { event: 'answer_result' }, ({ payload }) => {
     if (payload.email !== myEmail) return;
     clearInterval(slqTimerInterval);
     slqShow('slq-answered');
@@ -3068,7 +3069,7 @@ async function slqJoin() {
   });
 
   // Recibir marcador
-  lqChannel.on('broadcast', { event: 'scores' }, ({ payload }) => {
+  slqChannel.on('broadcast', { event: 'scores' }, ({ payload }) => {
     clearInterval(slqTimerInterval);
     slqShow('slq-scoreboard');
     const medals = ['🥇', '🥈', '🥉'];
@@ -3082,7 +3083,7 @@ async function slqJoin() {
   });
 
   // Tiempo agotado sin responder
-  lqChannel.on('broadcast', { event: 'time_up' }, ({ payload }) => {
+  slqChannel.on('broadcast', { event: 'time_up' }, ({ payload }) => {
     if (!slqAnswered) {
       clearInterval(slqTimerInterval);
       slqShow('slq-answered');
@@ -3094,7 +3095,7 @@ async function slqJoin() {
   });
 
   // Quiz terminado
-  lqChannel.on('broadcast', { event: 'final' }, ({ payload }) => {
+  slqChannel.on('broadcast', { event: 'final' }, ({ payload }) => {
     slqShow('slq-final');
     const medals = ['🥇', '🥈', '🥉'];
     const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
@@ -3108,19 +3109,19 @@ async function slqJoin() {
   });
 
   // Cancelado por el profesor
-  lqChannel.on('broadcast', { event: 'cancelled' }, () => {
+  slqChannel.on('broadcast', { event: 'cancelled' }, () => {
     toast('El profesor canceló el quiz.', 'info');
     slqExit();
   });
 
-  await lqChannel.subscribe();
+  await slqChannel.subscribe();
 
   // Notificar al host que el alumno entró
   setTimeout(() => {
-    lqChannel.send({ type: 'broadcast', event: 'join', payload: { email: myEmail, name: myName } });
+    slqChannel.send({ type: 'broadcast', event: 'join', payload: { email: myEmail, name: myName } });
     document.getElementById('slq-room-display').textContent = code;
     slqShow('slq-waiting');
-  }, 500);
+  }, 600);
 }
 
 // ── ALUMNO: Enviar respuesta ─────────────────────────────────
@@ -3133,8 +3134,8 @@ function slqAnswer(idx) {
   document.querySelectorAll('.lq-student-btn').forEach(b => b.disabled = true);
   document.getElementById(`slq-btn-${idx}`)?.classList.add('lq-selected');
 
-  // Transmitir al host
-  lqChannel.send({
+  // Transmitir al host usando slqChannel
+  slqChannel.send({
     type: 'broadcast', event: 'answer',
     payload: { email: currentUser?.email || 'anon', answerIdx: idx }
   });
@@ -3148,8 +3149,8 @@ function slqAnswer(idx) {
 // ── ALUMNO: Salir ────────────────────────────────────────────
 function slqExit() {
   clearInterval(slqTimerInterval);
-  if (lqChannel && !lqIsHost) { supabaseClient.removeChannel(lqChannel); lqChannel = null; }
-  document.getElementById('student-live-section').classList.add('hidden');
+  if (slqChannel) { supabaseClient.removeChannel(slqChannel); slqChannel = null; }
+  slqCloseModal();
 }
 
 // ── Parser de preguntas (reutiliza lógica existente) ─────────

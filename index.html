@@ -148,61 +148,80 @@
         <div class="exams-grid" id="exams-grid">
           <!-- generado dinámicamente -->
         </div>
+      </div>
+    </div>
 
-        <!-- ===== SECCIÓN: QUIZ EN VIVO (alumno) ===== -->
-        <div id="student-live-section" class="hidden">
+    <!-- ======================== MODAL: QUIZ EN VIVO (alumno) ======================== -->
+    <div class="slq-modal-overlay hidden" id="slq-modal-overlay" onclick="if(event.target===this&&document.getElementById('slq-join')&&!document.getElementById('slq-join').classList.contains('hidden'))slqCloseModal()">
+      <div class="slq-modal-drawer">
+        <!-- Header del modal -->
+        <div class="slq-modal-header">
+          <span style="font-size:1.2rem;font-weight:800;">⚡ Quiz en Vivo</span>
+          <button class="modal-close" onclick="slqCloseModal()">✕</button>
+        </div>
+        <!-- Contenido principal del modal -->
+        <div class="slq-modal-body">
+
           <!-- Pantalla: Ingresar código -->
-          <div id="slq-join" style="display:flex;flex-direction:column;align-items:center;padding:2rem 0;">
-            <div style="font-size:3rem;margin-bottom:1rem;">⚡</div>
-            <h2 style="margin-bottom:0.5rem;">Quiz en Vivo</h2>
+          <div id="slq-join" style="display:flex;flex-direction:column;align-items:center;padding:2rem 0.5rem;">
+            <div style="font-size:3.5rem;margin-bottom:0.8rem;">⚡</div>
+            <h2 style="margin-bottom:0.4rem;font-size:1.4rem;">Unirse al quiz</h2>
             <p style="color:var(--text-muted);margin-bottom:1.5rem;text-align:center;">Ingresa el código que te dio tu profesor</p>
             <div style="display:flex;gap:0.8rem;">
               <input class="form-input" id="slq-code-input"
                 placeholder="ABC123" maxlength="6"
-                style="text-transform:uppercase;letter-spacing:0.2rem;font-size:1.3rem;font-weight:700;text-align:center;width:160px;" />
+                style="text-transform:uppercase;letter-spacing:0.25rem;font-size:1.5rem;font-weight:800;text-align:center;width:170px;"
+                onkeydown="if(event.key==='Enter')slqJoin()" autofocus />
               <button class="btn btn-primary" onclick="slqJoin()">Unirse →</button>
             </div>
           </div>
+
           <!-- Pantalla: Sala de espera -->
           <div id="slq-waiting" class="hidden" style="text-align:center;padding:3rem 1rem;">
-            <div style="font-size:3rem;margin-bottom:1rem;" class="lq-pulse">⏳</div>
-            <h2>Esperando al profesor...</h2>
-            <p style="color:var(--text-muted);margin-top:0.5rem;">El quiz empezará cuando el profesor lo inicie</p>
-            <p style="margin-top:1.5rem;">Sala: <strong id="slq-room-display" style="color:var(--primary-light);letter-spacing:0.2rem;"></strong></p>
+            <div style="font-size:3.5rem;margin-bottom:1rem;" class="lq-pulse">⏳</div>
+            <h2 style="font-size:1.4rem;">Esperando al profesor...</h2>
+            <p style="color:var(--text-muted);margin-top:0.5rem;">El quiz empezará en cualquier momento</p>
+            <p style="margin-top:1.5rem;">Sala: <strong id="slq-room-display" style="color:var(--primary-light);letter-spacing:0.25rem;font-size:1.2rem;"></strong></p>
+            <button class="btn btn-ghost btn-sm" style="margin-top:2rem;" onclick="slqExit()">Cancelar</button>
           </div>
+
           <!-- Pantalla: Pregunta activa -->
-          <div id="slq-question" class="hidden" style="max-width:600px;margin:0 auto;padding:1rem 0;">
+          <div id="slq-question" class="hidden" style="padding:0.5rem 0;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
               <span id="slq-q-num" style="color:var(--text-muted);font-size:0.88rem;">Pregunta 1</span>
-              <span id="slq-timer" style="font-size:2rem;font-weight:900;color:var(--secondary);">20</span>
+              <span id="slq-timer" style="font-size:2.2rem;font-weight:900;color:var(--secondary);">20</span>
             </div>
             <div id="slq-q-text" class="latex-container"
-              style="background:rgba(255,255,255,0.05);border-radius:12px;padding:1.2rem;font-size:1.1rem;font-weight:600;margin-bottom:1.2rem;line-height:1.6;"></div>
+              style="background:rgba(255,255,255,0.06);border-radius:12px;padding:1.2rem;font-size:1.05rem;font-weight:600;margin-bottom:1rem;line-height:1.6;"></div>
             <div id="slq-options" class="lq-student-opts"></div>
           </div>
+
           <!-- Pantalla: Respuesta enviada -->
-          <div id="slq-answered" class="hidden" style="text-align:center;padding:3rem 1rem;">
+          <div id="slq-answered" class="hidden" style="text-align:center;padding:2.5rem 1rem;">
             <div id="slq-result-icon" style="font-size:4rem;margin-bottom:1rem;">⏳</div>
-            <h2 id="slq-result-text">Respuesta enviada</h2>
-            <p style="color:var(--text-muted);margin-top:0.5rem;">Esperando resultado...</p>
-            <div id="slq-points-gained" style="font-size:1.5rem;font-weight:700;color:var(--secondary);margin-top:1rem;"></div>
+            <h2 id="slq-result-text" style="font-size:1.4rem;">Respuesta enviada</h2>
+            <p style="color:var(--text-muted);margin-top:0.5rem;">Esperando resultado del profesor...</p>
+            <div id="slq-points-gained" style="font-size:1.6rem;font-weight:800;color:var(--secondary);margin-top:1rem;"></div>
           </div>
+
           <!-- Pantalla: Marcador entre preguntas -->
-          <div id="slq-scoreboard" class="hidden" style="max-width:500px;margin:0 auto;padding:1rem 0;">
+          <div id="slq-scoreboard" class="hidden" style="padding:0.5rem 0;">
             <h3 style="text-align:center;margin-bottom:1rem;">🏆 Marcador</h3>
             <div id="slq-score-rows"></div>
             <p style="text-align:center;color:var(--text-muted);margin-top:1rem;font-size:0.85rem;">Esperando la siguiente pregunta...</p>
           </div>
+
           <!-- Pantalla: Final -->
           <div id="slq-final" class="hidden" style="text-align:center;padding:2rem 0;">
             <div style="font-size:3.5rem;margin-bottom:0.5rem;">🎉</div>
-            <h2 style="margin-bottom:1.5rem;">¡Quiz terminado!</h2>
+            <h2 style="margin-bottom:1.5rem;font-size:1.4rem;">¡Quiz terminado!</h2>
             <div id="slq-final-podium" class="lq-podium"></div>
-            <button class="btn btn-primary" style="margin-top:2rem;" onclick="slqExit()">🏠 Volver al inicio</button>
+            <button class="btn btn-primary" style="margin-top:2rem;" onclick="slqExit()">🏠 Cerrar</button>
           </div>
-        </div>
-      </div>
-    </div>
+
+        </div><!-- /.slq-modal-body -->
+      </div><!-- /.slq-modal-drawer -->
+    </div><!-- #slq-modal-overlay -->
 
     <!-- ======================== VISTA: EXAMEN ======================== -->
     <div class="view" id="view-exam">

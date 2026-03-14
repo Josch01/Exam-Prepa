@@ -2799,4 +2799,55 @@ td .btn {
   .lq-host-opts {
     grid-template-columns: 1fr;
   }
-}
+}
+
+/* ── Student live quiz modal (bottom drawer) ── */
+.slq-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.slq-modal-overlay.hidden {
+  display: none;
+}
+
+.slq-modal-drawer {
+  background: var(--bg2);
+  border: 1px solid var(--card-border);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 580px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  animation: drawerUp 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  overflow: hidden;
+}
+
+@keyframes drawerUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.slq-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.4rem;
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+.slq-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 1rem 1.4rem 1.5rem;
+}
+
