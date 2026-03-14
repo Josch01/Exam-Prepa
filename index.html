@@ -111,6 +111,11 @@
         <span class="fab-pulse"></span>
       </button>
 
+      <!-- Botón flotante de quiz en vivo -->
+      <button class="fab-live" id="fab-live-btn" onclick="showStudentLiveSection()" title="⚡ Quiz en Vivo">
+        ⚡ En vivo
+      </button>
+
       <div class="student-body">
         <!-- Perfil -->
         <div class="profile-hero">
@@ -142,6 +147,59 @@
         <h2 class="section-title">Mis Exámenes</h2>
         <div class="exams-grid" id="exams-grid">
           <!-- generado dinámicamente -->
+        </div>
+
+        <!-- ===== SECCIÓN: QUIZ EN VIVO (alumno) ===== -->
+        <div id="student-live-section" class="hidden">
+          <!-- Pantalla: Ingresar código -->
+          <div id="slq-join" style="display:flex;flex-direction:column;align-items:center;padding:2rem 0;">
+            <div style="font-size:3rem;margin-bottom:1rem;">⚡</div>
+            <h2 style="margin-bottom:0.5rem;">Quiz en Vivo</h2>
+            <p style="color:var(--text-muted);margin-bottom:1.5rem;text-align:center;">Ingresa el código que te dio tu profesor</p>
+            <div style="display:flex;gap:0.8rem;">
+              <input class="form-input" id="slq-code-input"
+                placeholder="ABC123" maxlength="6"
+                style="text-transform:uppercase;letter-spacing:0.2rem;font-size:1.3rem;font-weight:700;text-align:center;width:160px;" />
+              <button class="btn btn-primary" onclick="slqJoin()">Unirse →</button>
+            </div>
+          </div>
+          <!-- Pantalla: Sala de espera -->
+          <div id="slq-waiting" class="hidden" style="text-align:center;padding:3rem 1rem;">
+            <div style="font-size:3rem;margin-bottom:1rem;" class="lq-pulse">⏳</div>
+            <h2>Esperando al profesor...</h2>
+            <p style="color:var(--text-muted);margin-top:0.5rem;">El quiz empezará cuando el profesor lo inicie</p>
+            <p style="margin-top:1.5rem;">Sala: <strong id="slq-room-display" style="color:var(--primary-light);letter-spacing:0.2rem;"></strong></p>
+          </div>
+          <!-- Pantalla: Pregunta activa -->
+          <div id="slq-question" class="hidden" style="max-width:600px;margin:0 auto;padding:1rem 0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
+              <span id="slq-q-num" style="color:var(--text-muted);font-size:0.88rem;">Pregunta 1</span>
+              <span id="slq-timer" style="font-size:2rem;font-weight:900;color:var(--secondary);">20</span>
+            </div>
+            <div id="slq-q-text" class="latex-container"
+              style="background:rgba(255,255,255,0.05);border-radius:12px;padding:1.2rem;font-size:1.1rem;font-weight:600;margin-bottom:1.2rem;line-height:1.6;"></div>
+            <div id="slq-options" class="lq-student-opts"></div>
+          </div>
+          <!-- Pantalla: Respuesta enviada -->
+          <div id="slq-answered" class="hidden" style="text-align:center;padding:3rem 1rem;">
+            <div id="slq-result-icon" style="font-size:4rem;margin-bottom:1rem;">⏳</div>
+            <h2 id="slq-result-text">Respuesta enviada</h2>
+            <p style="color:var(--text-muted);margin-top:0.5rem;">Esperando resultado...</p>
+            <div id="slq-points-gained" style="font-size:1.5rem;font-weight:700;color:var(--secondary);margin-top:1rem;"></div>
+          </div>
+          <!-- Pantalla: Marcador entre preguntas -->
+          <div id="slq-scoreboard" class="hidden" style="max-width:500px;margin:0 auto;padding:1rem 0;">
+            <h3 style="text-align:center;margin-bottom:1rem;">🏆 Marcador</h3>
+            <div id="slq-score-rows"></div>
+            <p style="text-align:center;color:var(--text-muted);margin-top:1rem;font-size:0.85rem;">Esperando la siguiente pregunta...</p>
+          </div>
+          <!-- Pantalla: Final -->
+          <div id="slq-final" class="hidden" style="text-align:center;padding:2rem 0;">
+            <div style="font-size:3.5rem;margin-bottom:0.5rem;">🎉</div>
+            <h2 style="margin-bottom:1.5rem;">¡Quiz terminado!</h2>
+            <div id="slq-final-podium" class="lq-podium"></div>
+            <button class="btn btn-primary" style="margin-top:2rem;" onclick="slqExit()">🏠 Volver al inicio</button>
+          </div>
         </div>
       </div>
     </div>
@@ -276,6 +334,10 @@
             <button class="sidebar-item" id="nav-messages" onclick="showPanel('messages');loadInbox()">
               <span class="sidebar-icon">📬</span> Mensajes
               <span class="msg-badge hidden" id="msg-badge">0</span>
+            </button>
+            <div class="sidebar-section">Herramientas</div>
+            <button class="sidebar-item" id="nav-live" onclick="showPanel('live');initLivePanel()">
+              <span class="sidebar-icon">⚡</span> Quiz en Vivo
             </button>
           </nav>
         </aside>
@@ -443,6 +505,98 @@
             <h1 class="section-title" style="margin-bottom:1.2rem;">📬 Bandeja de entrada</h1>
             <div id="inbox-list">
               <p style="color:var(--text-muted);text-align:center;padding:2rem;">Cargando...</p>
+            </div>
+          </div>
+
+          <!-- ===== Panel: Quiz en Vivo ===== -->
+          <div class="admin-panel" id="panel-live">
+            <!-- Fase 1: Configurar quiz -->
+            <div id="live-setup">
+              <h1 class="section-title" style="margin-bottom:0.5rem;">⚡ Quiz en Vivo</h1>
+              <p style="color:var(--text-muted);margin-bottom:1.5rem;">Crea un quiz rápido para tus alumnos en tiempo real, al estilo Kahoot.</p>
+              <div class="card" style="max-width:700px;">
+                <div class="form-group">
+                  <label class="form-label">Título del Quiz</label>
+                  <input class="form-input" id="lq-title" placeholder="Ej: Repaso rápido de Álgebra" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">⏱️ Tiempo por pregunta (segundos)</label>
+                  <input class="form-input" id="lq-time" type="number" value="20" min="5" max="120" style="width:100px;" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Preguntas <span style="color:var(--text-muted);font-size:0.8rem;">(LaTeX o texto normal)</span></label>
+                  <textarea class="form-input" id="lq-latex-q" rows="6"
+                    placeholder="\question Texto de la pregunta&#10;a) Opción A&#10;b) Opción B&#10;c) Opción C&#10;d) Opción D&#10;\end{question}" style="font-family:monospace;font-size:0.84rem;"></textarea>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Respuestas <span style="color:var(--text-muted);font-size:0.8rem;">(una por línea: 1.a 2.c …)</span></label>
+                  <textarea class="form-input" id="lq-latex-a" rows="3"
+                    placeholder="1.a&#10;2.b&#10;3.d" style="font-family:monospace;font-size:0.84rem;"></textarea>
+                </div>
+                <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
+                  <button class="btn btn-ghost" onclick="lqPreviewQuestions()">👁️ Previsualizar</button>
+                  <button class="btn btn-primary" onclick="lqStartSession()">⚡ Crear sala y compartir código</button>
+                </div>
+                <div id="lq-preview" style="margin-top:1rem;"></div>
+              </div>
+            </div>
+
+            <!-- Fase 2: Sala de espera (profesor) -->
+            <div id="live-lobby" class="hidden">
+              <div style="text-align:center;padding:2rem 0 1rem;">
+                <div style="font-size:0.95rem;color:var(--text-muted);margin-bottom:0.5rem;">Código de la sala</div>
+                <div id="lq-code-display" style="font-size:4rem;font-weight:900;letter-spacing:0.3rem;color:var(--primary-light);font-family:monospace;"></div>
+                <p style="color:var(--text-muted);font-size:0.88rem;margin-top:0.5rem;">Los alumnos ingresan este código en su pantalla de inicio</p>
+              </div>
+              <div class="card" style="max-width:500px;margin:0 auto 1.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
+                  <strong>Jugadores conectados</strong>
+                  <span id="lq-player-count" style="color:var(--primary-light);font-weight:700;">0</span>
+                </div>
+                <div id="lq-players-list" style="display:flex;flex-wrap:wrap;gap:0.5rem;"></div>
+              </div>
+              <div style="display:flex;gap:1rem;justify-content:center;">
+                <button class="btn btn-ghost" onclick="lqCancelSession()">✕ Cancelar</button>
+                <button class="btn btn-primary" id="lq-start-btn" onclick="lqBeginQuiz()" disabled>▶ Iniciar Quiz</button>
+              </div>
+            </div>
+
+            <!-- Fase 3: Control de pregunta (profesor) -->
+            <div id="live-question-ctrl" class="hidden">
+              <div class="lq-host-header">
+                <div>
+                  <span style="font-size:0.85rem;color:var(--text-muted);">Pregunta</span>
+                  <span id="lq-q-counter" style="font-weight:700;font-size:1.1rem;color:var(--primary-light);"> 1 / ?</span>
+                </div>
+                <div id="lq-host-timer" style="font-size:2.5rem;font-weight:900;color:var(--secondary);">20</div>
+                <div>
+                  <span style="font-size:0.85rem;color:var(--text-muted);">Respondieron</span>
+                  <span id="lq-answered-count" style="font-weight:700;font-size:1.1rem;color:var(--secondary);"> 0</span>
+                </div>
+              </div>
+              <div class="card" style="margin:1rem 0;">
+                <div id="lq-host-question" class="latex-container" style="font-size:1.2rem;font-weight:600;margin-bottom:1rem;"></div>
+                <div id="lq-host-options" class="lq-host-opts"></div>
+              </div>
+              <div style="display:flex;gap:1rem;justify-content:center;">
+                <button class="btn btn-ghost" onclick="lqAbortQuiz()">✕ Terminar</button>
+                <button class="btn btn-primary" id="lq-next-btn" onclick="lqNextQuestion()" style="min-width:180px;">Siguiente →</button>
+              </div>
+              <!-- Marcador entre preguntas -->
+              <div id="lq-scoreboard-mid" class="hidden" style="margin-top:1.5rem;">
+                <h3 style="text-align:center;margin-bottom:1rem;">🏆 Marcador</h3>
+                <div id="lq-scoreboard-rows"></div>
+              </div>
+            </div>
+
+            <!-- Fase 4: Resultado final (profesor) -->
+            <div id="live-final" class="hidden">
+              <div style="text-align:center;padding:2rem 0;">
+                <div style="font-size:3rem;margin-bottom:0.5rem;">🏆</div>
+                <h2 style="margin-bottom:2rem;">¡Quiz terminado!</h2>
+                <div id="lq-final-podium" class="lq-podium"></div>
+                <button class="btn btn-primary" style="margin-top:2rem;" onclick="lqReset()">↩ Nuevo Quiz</button>
+              </div>
             </div>
           </div>
 

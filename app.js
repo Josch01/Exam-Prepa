@@ -1022,6 +1022,7 @@ function showPanel(name) {
   if (name === 'material') renderMaterialPanel();
   if (name === 'announcements') renderAnnouncementsPanel();
   if (name === 'analytics') renderAnalytics();
+  if (name === 'live') initLivePanel();
 }
 
 function renderAdminStats(students, exams, logs) {
@@ -2725,4 +2726,442 @@ function startMessagePolling() {
 function stopMessagePolling() {
   if (msgPollInterval) clearInterval(msgPollInterval);
   msgPollInterval = null;
+}
+
+// ============================================================
+//  ⚡ QUIZ EN VIVO  (Supabase Realtime Broadcast — sin DB)
+// ============================================================
+
+// ── Estado del quiz ──────────────────────────────────────────
+let lqChannel = null;        // canal Supabase Realtime
+let lqSessionCode = '';      // código de 6 letras
+let lqQuestions = [];        // preguntas parseadas
+let lqCurrentQ = 0;          // índice de pregunta actual
+let lqTimeSec = 20;          // segundos por pregunta
+let lqTimerInterval = null;
+let lqPlayers = {};          // { email → { name, score } }
+let lqAnswersThisRound = {}; // { email → answerIdx }
+let lqQuestionStart = 0;     // timestamp cuando arrancó la pregunta
+let lqIsHost = false;        // ¿este cliente es el profesor?
+let lqPhase = 'idle';        // idle | lobby | question | scores | final
+
+// Estado del alumno
+let slqMyCode = '';
+let slqTimerInterval = null;
+let slqAnswered = false;
+let slqAnswerTime = 0;
+
+// ── Helpers ──────────────────────────────────────────────────
+function lqGenCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+function lqShow(phase) {
+  ['live-setup', 'live-lobby', 'live-question-ctrl', 'live-final'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  const target = document.getElementById(phase);
+  if (target) target.classList.remove('hidden');
+}
+
+function slqShow(phase) {
+  ['slq-join', 'slq-waiting', 'slq-question', 'slq-answered', 'slq-scoreboard', 'slq-final'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  const target = document.getElementById(phase);
+  if (target) target.classList.remove('hidden');
+}
+
+function lqRenderScoreboard(containerId) {
+  const sorted = Object.values(lqPlayers).sort((a, b) => b.score - a.score);
+  const medals = ['🥇', '🥈', '🥉'];
+  document.getElementById(containerId).innerHTML = sorted.map((p, i) => `
+    <div class="lq-score-row ${i === 0 ? 'lq-first' : ''}">
+      <span class="lq-rank">${medals[i] || (i + 1)}</span>
+      <span class="lq-player-name">${p.name}</span>
+      <span class="lq-player-score">${p.score} pts</span>
+    </div>`).join('');
+}
+
+function lqRenderPodium(containerId) {
+  const sorted = Object.values(lqPlayers).sort((a, b) => b.score - a.score).slice(0, 3);
+  const medals = ['🥇', '🥈', '🥉'];
+  const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+  document.getElementById(containerId).innerHTML = sorted.map((p, i) => `
+    <div class="lq-podium-card" style="border-color:${colors[i] || 'var(--card-border)'}">
+      <div style="font-size:2.5rem;">${medals[i] || ''}</div>
+      <div style="font-weight:700;font-size:1.1rem;">${p.name}</div>
+      <div style="color:var(--secondary);font-size:1.3rem;font-weight:900;">${p.score} pts</div>
+    </div>`).join('');
+}
+
+// ── INICIALIZAR (admin abre el panel) ────────────────────────
+function initLivePanel() {
+  lqReset();
+}
+
+// ── ADMIN: Previsualizar preguntas ───────────────────────────
+function lqPreviewQuestions() {
+  const qRaw = document.getElementById('lq-latex-q').value;
+  const aRaw = document.getElementById('lq-latex-a').value;
+  if (!qRaw.trim()) { toast('Escribe las preguntas primero.', 'error'); return; }
+  const qs = lqParseQuestions(qRaw, aRaw);
+  if (!qs.length) { toast('No se detectaron preguntas. Revisa el formato.', 'error'); return; }
+  const el = document.getElementById('lq-preview');
+  el.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:0.5rem;">${qs.length} pregunta(s) detectadas:</p>` +
+    qs.map((q, i) => `<p style="margin:0.3rem 0;font-size:0.88rem;">📝 <strong>${i + 1}.</strong> ${q.text.slice(0, 80)}${q.text.length > 80 ? '…' : ''}</p>`).join('');
+}
+
+// ── ADMIN: Crear sala ────────────────────────────────────────
+async function lqStartSession() {
+  const qRaw = document.getElementById('lq-latex-q').value;
+  const aRaw = document.getElementById('lq-latex-a').value;
+  if (!qRaw.trim()) { toast('Escribe las preguntas primero.', 'error'); return; }
+  lqQuestions = lqParseQuestions(qRaw, aRaw);
+  if (!lqQuestions.length) { toast('No se detectaron preguntas válidas.', 'error'); return; }
+  lqTimeSec = parseInt(document.getElementById('lq-time').value) || 20;
+
+  lqSessionCode = lqGenCode();
+  lqIsHost = true;
+  lqPlayers = {};
+  lqCurrentQ = 0;
+  lqPhase = 'lobby';
+
+  // Crear canal Realtime
+  lqChannel = supabaseClient.channel(`quiz-${lqSessionCode}`, {
+    config: { broadcast: { self: true } }
+  });
+
+  // Escuchar cuando un alumno se une
+  lqChannel.on('broadcast', { event: 'join' }, ({ payload }) => {
+    if (!lqPlayers[payload.email]) {
+      lqPlayers[payload.email] = { name: payload.name, score: 0 };
+      lqUpdateLobby();
+      // Confirmar bienvenida al alumno
+      lqChannel.send({ type: 'broadcast', event: 'welcome', payload: { code: lqSessionCode } });
+    }
+  });
+
+  // Escuchar respuestas
+  lqChannel.on('broadcast', { event: 'answer' }, ({ payload }) => {
+    if (lqPhase !== 'question') return;
+    if (lqAnswersThisRound[payload.email] !== undefined) return; // ya respondió
+    lqAnswersThisRound[payload.email] = payload.answerIdx;
+
+    // Calcular puntaje: base 1000, menos 7 puntos por segundo tardado
+    const elapsed = (Date.now() - lqQuestionStart) / 1000;
+    const q = lqQuestions[lqCurrentQ];
+    const correct = payload.answerIdx === q.correct;
+    let pts = 0;
+    if (correct) pts = Math.max(100, Math.round(1000 - elapsed * 40));
+    if (lqPlayers[payload.email]) lqPlayers[payload.email].score += pts;
+
+    // Actualizar contador de respuestas y notificar al alumno
+    const answered = Object.keys(lqAnswersThisRound).length;
+    document.getElementById('lq-answered-count').textContent = ' ' + answered;
+
+    lqChannel.send({
+      type: 'broadcast', event: 'answer_result',
+      payload: { email: payload.email, correct, pts, correctIdx: q.correct }
+    });
+  });
+
+  await lqChannel.subscribe();
+
+  document.getElementById('lq-code-display').textContent = lqSessionCode;
+  lqShow('live-lobby');
+}
+
+function lqUpdateLobby() {
+  const players = Object.values(lqPlayers);
+  document.getElementById('lq-player-count').textContent = players.length;
+  document.getElementById('lq-players-list').innerHTML = players.map(p =>
+    `<span class="lq-player-chip">${p.name}</span>`).join('');
+  const btn = document.getElementById('lq-start-btn');
+  if (btn) btn.disabled = players.length === 0;
+}
+
+function lqCancelSession() {
+  if (lqChannel) { lqChannel.send({ type: 'broadcast', event: 'cancelled', payload: {} }); }
+  lqReset();
+}
+
+// ── ADMIN: Iniciar quiz ──────────────────────────────────────
+async function lqBeginQuiz() {
+  lqCurrentQ = 0;
+  lqPhase = 'question';
+  lqShow('live-question-ctrl');
+  lqShowHostQuestion();
+}
+
+function lqShowHostQuestion() {
+  const q = lqQuestions[lqCurrentQ];
+  lqAnswersThisRound = {};
+  lqQuestionStart = Date.now();
+
+  document.getElementById('lq-q-counter').textContent = ` ${lqCurrentQ + 1} / ${lqQuestions.length}`;
+  document.getElementById('lq-host-question').textContent = q.text;
+  document.getElementById('lq-answered-count').textContent = ' 0';
+  document.getElementById('lq-scoreboard-mid').classList.add('hidden');
+  document.getElementById('lq-next-btn').textContent = 'Ver respuestas →';
+
+  const letters = ['A', 'B', 'C', 'D'];
+  const colors = ['lq-opt-red', 'lq-opt-blue', 'lq-opt-yellow', 'lq-opt-green'];
+  document.getElementById('lq-host-opts').innerHTML = q.options.map((o, i) =>
+    `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${o}</div>`).join('');
+
+  // Transmitir pregunta a alumnos
+  lqChannel.send({
+    type: 'broadcast', event: 'question',
+    payload: { idx: lqCurrentQ, text: q.text, options: q.options, total: lqQuestions.length, timeSec: lqTimeSec }
+  });
+
+  // Iniciar temporizador del host
+  let t = lqTimeSec;
+  document.getElementById('lq-host-timer').textContent = t;
+  if (lqTimerInterval) clearInterval(lqTimerInterval);
+  lqTimerInterval = setInterval(() => {
+    t--;
+    document.getElementById('lq-host-timer').textContent = t;
+    if (t <= 0) {
+      clearInterval(lqTimerInterval);
+      lqTimeUp();
+    }
+  }, 1000);
+}
+
+function lqTimeUp() {
+  lqPhase = 'scores';
+  // Mostrar respuesta correcta a alumnos
+  const correctIdx = lqQuestions[lqCurrentQ].correct;
+  lqChannel.send({ type: 'broadcast', event: 'time_up', payload: { correctIdx } });
+
+  // Transmitir marcador
+  const scores = Object.entries(lqPlayers).map(([email, p]) => ({ name: p.name, score: p.score }));
+  lqChannel.send({ type: 'broadcast', event: 'scores', payload: { scores } });
+
+  // Mostrar marcador en panel del host
+  lqRenderScoreboard('lq-scoreboard-rows');
+  document.getElementById('lq-scoreboard-mid').classList.remove('hidden');
+  document.getElementById('lq-next-btn').textContent =
+    lqCurrentQ + 1 < lqQuestions.length ? 'Siguiente pregunta →' : '🏆 Ver ganador';
+}
+
+function lqNextQuestion() {
+  if (lqPhase === 'question') {
+    // El profe presiona "Ver respuestas" antes de que el tiempo acabe
+    clearInterval(lqTimerInterval);
+    lqTimeUp();
+    return;
+  }
+  // Avanzar a la siguiente pregunta o terminar
+  lqCurrentQ++;
+  if (lqCurrentQ >= lqQuestions.length) {
+    lqEndQuiz();
+  } else {
+    lqPhase = 'question';
+    document.getElementById('lq-scoreboard-mid').classList.add('hidden');
+    lqShowHostQuestion();
+  }
+}
+
+function lqEndQuiz() {
+  lqPhase = 'final';
+  const scores = Object.entries(lqPlayers).map(([email, p]) => ({ name: p.name, score: p.score }));
+  lqChannel.send({ type: 'broadcast', event: 'final', payload: { scores } });
+  lqShow('live-final');
+  lqRenderPodium('lq-final-podium');
+}
+
+function lqAbortQuiz() {
+  if (!confirm('¿Terminar el quiz antes de que termine?')) return;
+  clearInterval(lqTimerInterval);
+  lqEndQuiz();
+}
+
+function lqReset() {
+  clearInterval(lqTimerInterval);
+  if (lqChannel) { supabaseClient.removeChannel(lqChannel); lqChannel = null; }
+  lqPhase = 'idle'; lqPlayers = {}; lqCurrentQ = 0; lqIsHost = false;
+  lqShow('live-setup');
+  const preview = document.getElementById('lq-preview');
+  if (preview) preview.innerHTML = '';
+}
+
+// ── ALUMNO: Mostrar sección de quiz en vivo ──────────────────
+function showStudentLiveSection() {
+  // Toggle: si ya está visible, ocultarla
+  const sec = document.getElementById('student-live-section');
+  if (!sec.classList.contains('hidden')) {
+    sec.classList.add('hidden');
+    return;
+  }
+  sec.classList.remove('hidden');
+  slqShow('slq-join');
+  // Scroll suave hacia abajo
+  sec.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ── ALUMNO: Unirse a sala ────────────────────────────────────
+async function slqJoin() {
+  const code = document.getElementById('slq-code-input').value.trim().toUpperCase();
+  if (code.length < 4) { toast('Ingresa el código de la sala.', 'error'); return; }
+
+  slqMyCode = code;
+  const myName = currentUser?.name || currentUser?.email || 'Alumno';
+  const myEmail = currentUser?.email || 'anon';
+
+  // Suscribirse al canal
+  if (lqChannel) { supabaseClient.removeChannel(lqChannel); }
+  lqChannel = supabaseClient.channel(`quiz-${code}`, { config: { broadcast: { self: false } } });
+
+  // Responder a bienvenida
+  lqChannel.on('broadcast', { event: 'welcome' }, () => {
+    document.getElementById('slq-room-display').textContent = code;
+    slqShow('slq-waiting');
+  });
+
+  // Recibir pregunta
+  lqChannel.on('broadcast', { event: 'question' }, ({ payload }) => {
+    slqAnswered = false;
+    slqShow('slq-question');
+    document.getElementById('slq-q-num').textContent = `Pregunta ${payload.idx + 1} de ${payload.total}`;
+    document.getElementById('slq-q-text').textContent = payload.text;
+
+    const colors = ['lq-opt-red', 'lq-opt-blue', 'lq-opt-yellow', 'lq-opt-green'];
+    const letters = ['A', 'B', 'C', 'D'];
+    document.getElementById('slq-options').innerHTML = payload.options.map((o, i) => `
+      <button class="lq-student-btn ${colors[i]}" onclick="slqAnswer(${i})" id="slq-btn-${i}">
+        <span class="lq-btn-letter">${letters[i]}</span>
+        <span class="lq-btn-text">${o}</span>
+      </button>`).join('');
+
+    // Temporizador del alumno
+    let t = payload.timeSec;
+    document.getElementById('slq-timer').textContent = t;
+    if (slqTimerInterval) clearInterval(slqTimerInterval);
+    slqTimerInterval = setInterval(() => {
+      t--;
+      const el = document.getElementById('slq-timer');
+      if (el) el.textContent = t;
+      if (t <= 3 && el) el.style.color = 'var(--danger)';
+      if (t <= 0) clearInterval(slqTimerInterval);
+    }, 1000);
+  });
+
+  // Recibir resultado de respuesta
+  lqChannel.on('broadcast', { event: 'answer_result' }, ({ payload }) => {
+    if (payload.email !== myEmail) return;
+    clearInterval(slqTimerInterval);
+    slqShow('slq-answered');
+    if (payload.correct) {
+      document.getElementById('slq-result-icon').textContent = '✅';
+      document.getElementById('slq-result-text').textContent = '¡Correcto!';
+      document.getElementById('slq-points-gained').textContent = `+${payload.pts} puntos`;
+    } else {
+      document.getElementById('slq-result-icon').textContent = '❌';
+      document.getElementById('slq-result-text').textContent = 'Incorrecto';
+      document.getElementById('slq-points-gained').textContent = '';
+    }
+  });
+
+  // Recibir marcador
+  lqChannel.on('broadcast', { event: 'scores' }, ({ payload }) => {
+    clearInterval(slqTimerInterval);
+    slqShow('slq-scoreboard');
+    const medals = ['🥇', '🥈', '🥉'];
+    const sorted = [...payload.scores].sort((a, b) => b.score - a.score);
+    document.getElementById('slq-score-rows').innerHTML = sorted.map((p, i) => `
+      <div class="lq-score-row ${p.name === myName ? 'lq-me' : ''}">
+        <span class="lq-rank">${medals[i] || (i + 1)}</span>
+        <span class="lq-player-name">${p.name}${p.name === myName ? ' (tú)' : ''}</span>
+        <span class="lq-player-score">${p.score} pts</span>
+      </div>`).join('');
+  });
+
+  // Tiempo agotado sin responder
+  lqChannel.on('broadcast', { event: 'time_up' }, ({ payload }) => {
+    if (!slqAnswered) {
+      clearInterval(slqTimerInterval);
+      slqShow('slq-answered');
+      document.getElementById('slq-result-icon').textContent = '⏰';
+      document.getElementById('slq-result-text').textContent = 'Tiempo agotado';
+      document.getElementById('slq-points-gained').textContent = '';
+    }
+    // Resaltar respuesta correcta si ya respondió
+  });
+
+  // Quiz terminado
+  lqChannel.on('broadcast', { event: 'final' }, ({ payload }) => {
+    slqShow('slq-final');
+    const medals = ['🥇', '🥈', '🥉'];
+    const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+    const sorted = [...payload.scores].sort((a, b) => b.score - a.score).slice(0, 3);
+    document.getElementById('slq-final-podium').innerHTML = sorted.map((p, i) => `
+      <div class="lq-podium-card" style="border-color:${colors[i] || 'var(--card-border)'}">
+        <div style="font-size:2.5rem;">${medals[i] || ''}</div>
+        <div style="font-weight:700;">${p.name}</div>
+        <div style="color:var(--secondary);font-weight:900;">${p.score} pts</div>
+      </div>`).join('');
+  });
+
+  // Cancelado por el profesor
+  lqChannel.on('broadcast', { event: 'cancelled' }, () => {
+    toast('El profesor canceló el quiz.', 'info');
+    slqExit();
+  });
+
+  await lqChannel.subscribe();
+
+  // Notificar al host que el alumno entró
+  setTimeout(() => {
+    lqChannel.send({ type: 'broadcast', event: 'join', payload: { email: myEmail, name: myName } });
+    document.getElementById('slq-room-display').textContent = code;
+    slqShow('slq-waiting');
+  }, 500);
+}
+
+// ── ALUMNO: Enviar respuesta ─────────────────────────────────
+function slqAnswer(idx) {
+  if (slqAnswered) return;
+  slqAnswered = true;
+  clearInterval(slqTimerInterval);
+
+  // Deshabilitar todos los botones
+  document.querySelectorAll('.lq-student-btn').forEach(b => b.disabled = true);
+  document.getElementById(`slq-btn-${idx}`)?.classList.add('lq-selected');
+
+  // Transmitir al host
+  lqChannel.send({
+    type: 'broadcast', event: 'answer',
+    payload: { email: currentUser?.email || 'anon', answerIdx: idx }
+  });
+
+  slqShow('slq-answered');
+  document.getElementById('slq-result-icon').textContent = '⏳';
+  document.getElementById('slq-result-text').textContent = 'Respuesta enviada';
+  document.getElementById('slq-points-gained').textContent = 'Esperando resultado...';
+}
+
+// ── ALUMNO: Salir ────────────────────────────────────────────
+function slqExit() {
+  clearInterval(slqTimerInterval);
+  if (lqChannel && !lqIsHost) { supabaseClient.removeChannel(lqChannel); lqChannel = null; }
+  document.getElementById('student-live-section').classList.add('hidden');
+}
+
+// ── Parser de preguntas (reutiliza lógica existente) ─────────
+function lqParseQuestions(qRaw, aRaw) {
+  // Reutilizar el parseLatexQuestions existente
+  const qs = typeof parseLatexQuestions === 'function' ? parseLatexQuestions(qRaw) : [];
+  if (qs.length && aRaw && aRaw.trim()) {
+    const answers = typeof parseLatexAnswers === 'function' ? parseLatexAnswers(aRaw) : {};
+    qs.forEach((q, i) => {
+      const key = i + 1;
+      if (answers[key] !== undefined && answers[key] < q.options.length) q.correct = answers[key];
+    });
+  }
+  return qs;
 }
