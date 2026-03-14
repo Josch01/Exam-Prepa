@@ -2801,6 +2801,15 @@ td .btn {
   }
 }
 
+/* Blank line for fill-in-the-blank LaTeX questions */
+.lq-blank {
+  display: inline-block;
+  border-bottom: 2px solid currentColor;
+  min-width: 60px;
+  margin: 0 4px;
+  vertical-align: bottom;
+}
+
 /* ── Student live quiz modal (bottom drawer) ── */
 .slq-modal-overlay {
   position: fixed;
@@ -2813,6 +2822,7 @@ td .btn {
   justify-content: center;
   animation: fadeIn 0.2s ease;
 }
+
 
 .slq-modal-overlay.hidden {
   display: none;

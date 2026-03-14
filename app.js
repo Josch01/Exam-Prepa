@@ -2752,6 +2752,7 @@ let slqMyEmail   = '';
 let slqMyName    = '';
 let slqTimerInterval = null;
 let slqAnswered  = false;
+let slqLastQuestionIdx = -1; // para detectar nueva pregunta y resetear slqAnswered
 
 // ── Helpers ──────────────────────────────────────────────────
 function lqGenCode() {
@@ -3039,12 +3040,19 @@ async function slqJoin() {
     if (!hostArr || hostArr.length === 0) return;
     const h = hostArr[0];
 
-    if (h.phase === 'question' && !slqAnswered) {
-      const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
-      slqRenderQuestion(h, elapsed);
+    if (h.phase === 'question') {
+      // ¡KEY FIX! Resetear slqAnswered cuando llega una NUEVA pregunta
+      const qIdx = h.questionIdx ?? 0;
+      if (qIdx !== slqLastQuestionIdx) {
+        slqAnswered = false;
+        slqLastQuestionIdx = qIdx;
+      }
+      if (!slqAnswered) {
+        const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
+        slqRenderQuestion(h, elapsed);
+      }
     } else if (h.phase === 'scores') {
       clearInterval(slqTimerInterval);
-      if (!slqAnswered) slqShow('slq-answered'); // mostramos resultado mientras si no respondió
       slqShow('slq-scoreboard');
       lqRenderScoreRows('slq-score-rows', h.scores || []);
     } else if (h.phase === 'final') {
@@ -3056,6 +3064,7 @@ async function slqJoin() {
       slqExit();
     }
   });
+
 
   // ── Resultado de respuesta individual ────────────────────────
   slqChannel.on('broadcast', { event: 'answer_result' }, ({ payload }) => {
@@ -3076,6 +3085,35 @@ async function slqJoin() {
 
   document.getElementById('slq-room-display').textContent = code;
   slqShow('slq-waiting');
+}
+
+// ── Renderizar texto con LaTeX para el quiz ──────────────────
+function lqProcessText(raw) {
+  if (!raw) return '';
+  // 1. Escape HTML entities first (prevent XSS)
+  let t = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // 2. \rule{w}{h}  →  visual blank line ______
+  t = t.replace(/\\rule\{[^}]*\}\{[^}]*\}/g,
+    '<span class="lq-blank">______</span>');
+  // 3. Render $$...$$ as display math
+  t = t.replace(/\$\$([^$]+)\$\$/g, (_, math) => {
+    try { return typeof katex !== 'undefined'
+      ? katex.renderToString(math, { displayMode: true, throwOnError: false })
+      : `[${math}]`; } catch(e) { return `[${math}]`; }
+  });
+  // 4. Render $...$ as inline math
+  t = t.replace(/\$([^$\n]+)\$/g, (_, math) => {
+    try { return typeof katex !== 'undefined'
+      ? katex.renderToString(math, { displayMode: false, throwOnError: false })
+      : `[${math}]`; } catch(e) { return `[${math}]`; }
+  });
+  // 5. Render \(...\) inline math
+  t = t.replace(/\\\((.+?)\\\)/g, (_, math) => {
+    try { return typeof katex !== 'undefined'
+      ? katex.renderToString(math, { displayMode: false, throwOnError: false })
+      : `[${math}]`; } catch(e) { return `[${math}]`; }
+  });
+  return t;
 }
 
 // ── ALUMNO: Renderizar pregunta ──────────────────────────────
