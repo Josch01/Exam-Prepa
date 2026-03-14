@@ -2740,6 +2740,7 @@ let lqQuestions = [];        // preguntas parseadas
 let lqCurrentQ = 0;          // índice de pregunta actual
 let lqTimeSec = 20;          // segundos por pregunta
 let lqTimerInterval = null;
+let lqReSyncInterval = null; // intervalo de re-sincronización para alumnos que pierdan el broadcast
 let lqPlayers = {};          // { email → { name, score } }
 let lqAnswersThisRound = {}; // { email → answerIdx }
 let lqQuestionStart = 0;     // timestamp cuando arrancó la pregunta
@@ -2840,8 +2841,20 @@ async function lqStartSession() {
     if (!lqPlayers[payload.email]) {
       lqPlayers[payload.email] = { name: payload.name, score: 0 };
       lqUpdateLobby();
-      // Confirmar bienvenida al alumno
-      lqChannel.send({ type: 'broadcast', event: 'welcome', payload: { code: lqSessionCode } });
+    }
+    // Siempre confirmar bienvenida
+    lqChannel.send({ type: 'broadcast', event: 'welcome', payload: { code: lqSessionCode } });
+    // Si el quiz ya empezó, enviar el estado actual al alumno que acaba de unirse
+    if (lqPhase === 'question' && lqQuestions[lqCurrentQ]) {
+      const q = lqQuestions[lqCurrentQ];
+      setTimeout(() => {
+        lqChannel.send({
+          type: 'broadcast', event: 'sync_state',
+          payload: { phase: 'question', idx: lqCurrentQ, text: q.text, options: q.options,
+                     total: lqQuestions.length, timeSec: lqTimeSec,
+                     elapsed: Math.round((Date.now() - lqQuestionStart) / 1000) }
+        });
+      }, 400);
     }
   });
 
@@ -2910,14 +2923,28 @@ function lqShowHostQuestion() {
 
   const letters = ['A', 'B', 'C', 'D'];
   const colors = ['lq-opt-red', 'lq-opt-blue', 'lq-opt-yellow', 'lq-opt-green'];
-  document.getElementById('lq-host-opts').innerHTML = q.options.map((o, i) =>
+  document.getElementById('lq-host-opts').innerHTML = (q.options || []).map((o, i) =>
     `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${o}</div>`).join('');
 
-  // Transmitir pregunta a alumnos
-  lqChannel.send({
-    type: 'broadcast', event: 'question',
-    payload: { idx: lqCurrentQ, text: q.text, options: q.options, total: lqQuestions.length, timeSec: lqTimeSec }
-  });
+  // Broadcast de pregunta con un pequeño delay para que los alumnos estén listos
+  const questionPayload = {
+    idx: lqCurrentQ, text: q.text, options: q.options || [],
+    total: lqQuestions.length, timeSec: lqTimeSec
+  };
+
+  // Primer envío
+  setTimeout(() => {
+    lqChannel.send({ type: 'broadcast', event: 'question', payload: questionPayload });
+  }, 300);
+
+  // Re-broadcast periódico cada 4 segundos (captura a alumnos que no lo recibieron)
+  if (lqReSyncInterval) clearInterval(lqReSyncInterval);
+  lqReSyncInterval = setInterval(() => {
+    if (lqPhase !== 'question') { clearInterval(lqReSyncInterval); return; }
+    lqChannel.send({ type: 'broadcast', event: 'sync_state',
+      payload: { ...questionPayload, phase: 'question',
+                 elapsed: Math.round((Date.now() - lqQuestionStart) / 1000) } });
+  }, 4000);
 
   // Iniciar temporizador del host
   let t = lqTimeSec;
@@ -2984,6 +3011,7 @@ function lqAbortQuiz() {
 
 function lqReset() {
   clearInterval(lqTimerInterval);
+  clearInterval(lqReSyncInterval);
   if (lqChannel) { supabaseClient.removeChannel(lqChannel); lqChannel = null; }
   lqPhase = 'idle'; lqPlayers = {}; lqCurrentQ = 0; lqIsHost = false;
   lqShow('live-setup');
@@ -3024,8 +3052,9 @@ async function slqJoin() {
     slqShow('slq-waiting');
   });
 
-  // Recibir pregunta
-  slqChannel.on('broadcast', { event: 'question' }, ({ payload }) => {
+  // ── FUNCIÓN AUXILIAR: mostrar una pregunta recibida
+  function slqRenderQuestion(payload, elapsedSec) {
+    if (slqAnswered) return; // ya respondió esta ronda
     slqAnswered = false;
     slqShow('slq-question');
     document.getElementById('slq-q-num').textContent = `Pregunta ${payload.idx + 1} de ${payload.total}`;
@@ -3050,6 +3079,18 @@ async function slqJoin() {
       if (t <= 3 && el) el.style.color = 'var(--danger)';
       if (t <= 0) clearInterval(slqTimerInterval);
     }, 1000);
+  } // end slqRenderQuestion
+
+  // Recibir pregunta (broadcast inicial)
+  slqChannel.on('broadcast', { event: 'question' }, ({ payload }) => {
+    slqAnswered = false;
+    slqRenderQuestion(payload, 0);
+  });
+
+  // Recibir estado (re-sync para alumnos que perdieron el primer broadcast)
+  slqChannel.on('broadcast', { event: 'sync_state' }, ({ payload }) => {
+    if (slqAnswered) return;
+    if (payload.phase === 'question') slqRenderQuestion(payload, payload.elapsed || 0);
   });
 
   // Recibir resultado de respuesta
