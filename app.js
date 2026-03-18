@@ -846,7 +846,7 @@ function confirmAnswer() {
   const correctText = q.options[q.correct];
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
   const justHTML = q.justification
-    ? `<div class="feedback-justification">💡 <strong>Justificación:</strong> ${q.justification}</div>`
+    ? `<div class="feedback-justification">💡 <strong>Justificación:</strong> ${lqProcessText(q.justification)}</div>`
     : '';
 
   if (isOk) {
@@ -1905,7 +1905,7 @@ function toggleReview() {
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
   section.innerHTML = examState.questionResults.map((r, i) => {
     const justHTML = r.justification
-      ? `<div class="review-justification">💡 <strong>Justificación:</strong> ${r.justification}</div>`
+      ? `<div class="review-justification">💡 <strong>Justificación:</strong> ${lqProcessText(r.justification)}</div>`
       : '';
     return `
     <div class="review-item ${r.isRight ? 'review-correct' : 'review-wrong'}">
@@ -3088,29 +3088,61 @@ async function slqJoin() {
 }
 
 // ── Renderizar texto con LaTeX para el quiz ──────────────────
+/**
+ * Procesa texto con LaTeX para mostrar en HTML.
+ * Maneja: \textbf, \textit, \underline, \emph, \text, \rule,
+ *          $...$, $$...$$, \(...\), \[...\]
+ */
 function lqProcessText(raw) {
   if (!raw) return '';
-  // 1. Escape HTML entities first (prevent XSS)
-  let t = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  // 2. \rule{w}{h}  →  visual blank line ______
+  // 1. Escape HTML (seguridad)
+  let t = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 2. Comandos de texto LaTeX más comunes
+  // Un solo nivel de llaves (no anidadas)
+  t = t.replace(/\\textbf\{([^}]*)\}/g,   '<strong>$1</strong>');
+  t = t.replace(/\\textit\{([^}]*)\}/g,   '<em>$1</em>');
+  t = t.replace(/\\emph\{([^}]*)\}/g,     '<em>$1</em>');
+  t = t.replace(/\\underline\{([^}]*)\}/g,'<u>$1</u>');
+  t = t.replace(/\\texttt\{([^}]*)\}/g,   '<code>$1</code>');
+  t = t.replace(/\\textsc\{([^}]*)\}/g,   '<span style="font-variant:small-caps">$1</span>');
+  t = t.replace(/\\textsuperscript\{([^}]*)\}/g, '<sup>$1</sup>');
+  t = t.replace(/\\textsubscript\{([^}]*)\}/g,   '<sub>$1</sub>');
+  // \text{} dentro de modo matemático (fuera): tratar como texto plano
+  t = t.replace(/\\text\{([^}]*)\}/g, '$1');
+  // Saltos de línea LaTeX
+  t = t.replace(/\\\\/g, '<br>');
+  t = t.replace(/\\newline/g, '<br>');
+  t = t.replace(/\\par\b/g, '</p><p>');
+
+  // 3. \rule{w}{h}  →  línea en blanco visual _____
   t = t.replace(/\\rule\{[^}]*\}\{[^}]*\}/g,
     '<span class="lq-blank">______</span>');
-  // 3. Render $$...$$ as display math
-  t = t.replace(/\$\$([^$]+)\$\$/g, (_, math) => {
+
+  // 4. $$...$$ matemática en bloque
+  t = t.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
     try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math, { displayMode: true, throwOnError: false })
+      ? katex.renderToString(math.trim(), { displayMode: true,  throwOnError: false })
       : `[${math}]`; } catch(e) { return `[${math}]`; }
   });
-  // 4. Render $...$ as inline math
-  t = t.replace(/\$([^$\n]+)\$/g, (_, math) => {
+  // 5. $...$ matemática en línea
+  t = t.replace(/\$([^$\n]+?)\$/g, (_, math) => {
     try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math, { displayMode: false, throwOnError: false })
+      ? katex.renderToString(math.trim(), { displayMode: false, throwOnError: false })
       : `[${math}]`; } catch(e) { return `[${math}]`; }
   });
-  // 5. Render \(...\) inline math
-  t = t.replace(/\\\((.+?)\\\)/g, (_, math) => {
+  // 6. \(... \) y \[... \]
+  t = t.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => {
     try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math, { displayMode: false, throwOnError: false })
+      ? katex.renderToString(math.trim(), { displayMode: false, throwOnError: false })
+      : `[${math}]`; } catch(e) { return `[${math}]`; }
+  });
+  t = t.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => {
+    try { return typeof katex !== 'undefined'
+      ? katex.renderToString(math.trim(), { displayMode: true,  throwOnError: false })
       : `[${math}]`; } catch(e) { return `[${math}]`; }
   });
   return t;
