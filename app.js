@@ -103,9 +103,22 @@ async function api(method, endpoint, body) {
     }
     if (endpoint === '/api/auth/register') {
       const { data, error } = await supabaseClient.auth.signUp({ email: body.email, password: body.password });
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Si ya existe en Auth pero no en profiles (fue eliminado a medias), recrear el profile
+        if (error.message.includes('already registered') || error.message.includes('User already registered')) {
+          const { data: loginData, error: loginErr } = await supabaseClient.auth.signInWithPassword(
+            { email: body.email, password: body.password });
+          if (loginErr) throw new Error('El correo ya está registrado. Usa otro correo o contacta al administrador.');
+          // Reinsertar profile (puede que ya exista, usar upsert)
+          await supabaseClient.from('profiles').upsert(
+            { email: body.email.toLowerCase(), name: body.name, role: 'student', section: '', allowed_exams: [] },
+            { onConflict: 'email' });
+          return { token: loginData.session.access_token, user: { email: body.email.toLowerCase(), name: body.name, role: 'student', allowedExams: [] } };
+        }
+        throw new Error(error.message);
+      }
       await supabaseClient.from('profiles').insert({ email: body.email.toLowerCase(), name: body.name, role: 'student', section: '', allowed_exams: [] });
-      return { token: data.session.access_token, user: { email: body.email.toLowerCase(), name: body.name, role: 'student', allowedExams: [] } };
+      return { token: data.session?.access_token, user: { email: body.email.toLowerCase(), name: body.name, role: 'student', allowedExams: [] } };
     }
     if (endpoint === '/api/auth/me') {
       const { data: { user } } = await supabaseClient.auth.getUser();
@@ -150,10 +163,19 @@ async function api(method, endpoint, body) {
     }
     if (endpoint.startsWith('/api/users/') && method === 'DELETE') {
       const targetEmail = decodeURIComponent(endpoint.split('/')[3]);
+      // 1. Borrar de las tablas de la app
       await supabaseClient.from('profiles').delete().eq('email', targetEmail);
       await supabaseClient.from('logs').delete().eq('student_email', targetEmail);
+      // 2. Borrar de Supabase Auth mediante función SQL con SECURITY DEFINER
+      //    (La anon key no puede usar auth.admin directamente)
+      try {
+        await supabaseClient.rpc('delete_auth_user_by_email', { target_email: targetEmail });
+      } catch (authErr) {
+        console.warn('delete_auth_user_by_email RPC:', authErr.message);
+      }
       return { ok: true };
     }
+
 
     // === EXAMS ===
     if (endpoint === '/api/exams' && method === 'GET') {
