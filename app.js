@@ -2942,6 +2942,18 @@ function lqShowHostQuestion() {
     timeSec: lqTimeSec,
     startTime: Date.now()
   });
+  // ── Tambien por Broadcast como respaldo inmediato ──
+  lqChannel.send({
+    type: 'broadcast', event: 'question',
+    payload: {
+      questionIdx: lqCurrentQ,
+      text: q.text,
+      options: q.options || [],
+      total: lqQuestions.length,
+      timeSec: lqTimeSec,
+      startTime: Date.now()
+    }
+  });
 
   // ── Después actualizar UI del profesor ──
   const qCounter = document.getElementById('lq-q-counter');
@@ -3067,15 +3079,16 @@ async function slqJoin() {
     const h = hostArr[0];
 
     if (h.phase === 'question') {
-      // ¡KEY FIX! Resetear slqAnswered cuando llega una NUEVA pregunta
       const qIdx = h.questionIdx ?? 0;
       if (qIdx !== slqLastQuestionIdx) {
         slqAnswered = false;
         slqLastQuestionIdx = qIdx;
       }
       if (!slqAnswered) {
-        const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
-        slqRenderQuestion(h, elapsed);
+        try {
+          const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
+          slqRenderQuestion(h, elapsed);
+        } catch(e) { console.error('slqRenderQuestion (presence):', e); }
       }
     } else if (h.phase === 'scores') {
       clearInterval(slqTimerInterval);
@@ -3091,8 +3104,25 @@ async function slqJoin() {
     }
   });
 
+  // ── Broadcast: el host envía una pregunta (respaldo inmediato) ──────────
+  slqChannel.on('broadcast', { event: 'question' }, ({ payload: h }) => {
+    if (!h) return;
+    const qIdx = h.questionIdx ?? 0;
+    if (qIdx !== slqLastQuestionIdx) {
+      slqAnswered = false;
+      slqLastQuestionIdx = qIdx;
+    }
+    if (!slqAnswered) {
 
-  // ── Resultado de respuesta individual ────────────────────────
+        try {
+          const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
+          slqRenderQuestion(h, elapsed);
+        } catch(e) { console.error('slqRenderQuestion (broadcast):', e); }
+    }
+  });
+
+
+  // ── Resultado de respuesta individual ───────────────────────────────────
   slqChannel.on('broadcast', { event: 'answer_result' }, ({ payload }) => {
     if (payload.email !== slqMyEmail) return;
     clearInterval(slqTimerInterval);
