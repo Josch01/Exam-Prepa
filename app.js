@@ -2940,7 +2940,7 @@ function lqShowHostQuestion() {
   const nextBtn  = document.getElementById('lq-next-btn');
 
   if (qCounter) qCounter.textContent = ` ${lqCurrentQ+1} / ${lqQuestions.length}`;
-  if (qText)    qText.textContent = q.text;
+  if (qText)    qText.innerHTML = lqProcessText(q.text);
   if (qAns)     qAns.textContent  = ' 0';
   if (scoreMid) scoreMid.classList.add('hidden');
   if (nextBtn)  nextBtn.textContent = 'Ver respuestas →';
@@ -2948,7 +2948,7 @@ function lqShowHostQuestion() {
   const letters = ['A','B','C','D'];
   const colors  = ['lq-opt-red','lq-opt-blue','lq-opt-yellow','lq-opt-green'];
   if (qOpts) qOpts.innerHTML = (q.options||[]).map((o,i) =>
-    `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${o}</div>`).join('');
+    `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${lqProcessText(o)}</div>`).join('');
 
   // Publicar estado de pregunta en Presence (garantizado a todos)
   lqChannel.track({
@@ -3138,7 +3138,24 @@ function lqProcessText(raw) {
   // Saltos de línea LaTeX
   t = t.replace(/\\\\/g, '<br>');
   t = t.replace(/\\newline/g, '<br>');
+  t = t.replace(/\\linebreak/g, '<br>');
   t = t.replace(/\\par\b/g, '</p><p>');
+  t = t.replace(/\\noindent\b/g, '');
+  // Espacios: \quad, \qquad, \,  \;  \:
+  t = t.replace(/\\qquad/g, '&emsp;&emsp;');
+  t = t.replace(/\\quad/g, '&emsp;');
+  t = t.replace(/\\[,;:]/g, '&thinsp;');
+  t = t.replace(/\\hspace\{[^}]*\}/g, '&emsp;');
+  t = t.replace(/\\vspace\{[^}]*\}/g, '<br>');
+  t = t.replace(/\\linespace\b/g, '<br>');
+  // Puntos suspensivos
+  t = t.replace(/\\ldots|\\dots|\\cdots/g, '…');
+  // Caracteres escapados
+  t = t.replace(/\\%/g, '%');
+  t = t.replace(/\\&amp;/g, '&amp;');
+  t = t.replace(/\\#/g, '#');
+  t = t.replace(/\\\$/g, '$');
+  t = t.replace(/\\_ /g, '_');
 
   // 3. \rule{w}{h}  →  línea en blanco visual _____
   t = t.replace(/\\rule\{[^}]*\}\{[^}]*\}/g,
@@ -3181,28 +3198,18 @@ function slqRenderQuestion(h, elapsedSec) {
   const optsEl = document.getElementById('slq-options');
   const timerEl = document.getElementById('slq-timer');
 
-  if (numEl)  numEl.textContent  = `Pregunta ${(h.questionIdx||0)+1} de ${h.total||'?'}`;
-  if (textEl) textEl.textContent = h.text || '';
+  if (numEl)  numEl.textContent = `Pregunta ${(h.questionIdx||0)+1} de ${h.total||'?'}`;
+  // Render LaTeX in question text
+  if (textEl) textEl.innerHTML = lqProcessText(h.text || '');
 
-  // Renderizar opciones con KaTeX si está disponible
+  // Render options with LaTeX
   const colors  = ['lq-opt-red','lq-opt-blue','lq-opt-yellow','lq-opt-green'];
   const letters = ['A','B','C','D'];
   if (optsEl) optsEl.innerHTML = (h.options||[]).map((o, i) => `
     <button class="lq-student-btn ${colors[i]}" onclick="slqAnswer(${i})" id="slq-btn-${i}">
       <span class="lq-btn-letter">${letters[i]}</span>
-      <span class="lq-btn-text">${o}</span>
+      <span class="lq-btn-text">${lqProcessText(o)}</span>
     </button>`).join('');
-
-  // Renderizar LaTeX en la pregunta y opciones si KaTeX está disponible
-  if (typeof renderMathInElement === 'function') {
-    try {
-      const container = document.getElementById('slq-question');
-      if (container) renderMathInElement(container, { delimiters:[
-        {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},
-        {left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}
-      ], throwOnError: false });
-    } catch(e) {}
-  }
 
   // Temporizador
   if (timerEl) { timerEl.textContent = remaining; timerEl.style.color = ''; }
