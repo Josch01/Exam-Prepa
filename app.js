@@ -458,6 +458,7 @@ async function handleLogin() {
     currentToken = data.token;
     currentUser = data.user;
     sessionStorage.setItem('examapp_token', currentToken);
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
     toast('¡Bienvenido/a, ' + currentUser.name + '!', 'success');
     routeUser();
   } catch (e) {
@@ -478,6 +479,7 @@ async function handleRegister() {
     currentToken = data.token;
     currentUser = data.user;
     sessionStorage.setItem('examapp_token', currentToken);
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
     toast('¡Cuenta creada! Bienvenido/a, ' + name + '.', 'success');
     routeUser();
   } catch (e) {
@@ -485,7 +487,7 @@ async function handleRegister() {
   }
 }
 
-function logout() {
+async function logout() {
   stopMessagePolling();
   currentUser = null;
   currentToken = null;
@@ -494,6 +496,8 @@ function logout() {
   cachedStudents = [];
   cachedExams = [];
   sessionStorage.removeItem('examapp_token');
+  localStorage.removeItem('currentUser');
+  try { await supabaseClient.auth.signOut(); } catch (e) { console.error(e); }
   ['login-email', 'login-password', 'reg-name', 'reg-email', 'reg-password'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
