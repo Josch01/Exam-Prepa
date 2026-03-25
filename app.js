@@ -3252,8 +3252,27 @@ function slqRenderQuestion(h, elapsedSec) {
   slqTimerInterval = setInterval(() => {
     t--;
     if (timerEl) { timerEl.textContent = t; if (t <= 3) timerEl.style.color = 'var(--danger)'; }
-    if (t <= 0) clearInterval(slqTimerInterval);
+    if (t <= 0) { clearInterval(slqTimerInterval); slqTimeOut(); }
   }, 1000);
+}
+
+// ── ALUMNO: Tiempo agotado ────────────────────────────────────
+function slqTimeOut() {
+  if (slqAnswered) return;  // ya respondió antes de que llegue este callback
+  slqAnswered = true;
+  // Notificar al host que no respondió (índice -1 = sin respuesta)
+  if (slqChannel) slqChannel.send({
+    type: 'broadcast', event: 'answer',
+    payload: { email: slqMyEmail, answerIdx: -1 }
+  });
+  // Mostrar pantalla de tiempo agotado
+  slqShow('slq-answered');
+  const iconEl  = document.getElementById('slq-result-icon');
+  const textEl  = document.getElementById('slq-result-text');
+  const ptsEl   = document.getElementById('slq-points-gained');
+  if (iconEl) iconEl.textContent  = '⏰';
+  if (textEl) textEl.textContent  = '¡Tiempo agotado!';
+  if (ptsEl)  ptsEl.textContent   = '+0 puntos';
 }
 
 // ── ALUMNO: Enviar respuesta ─────────────────────────────────
