@@ -2932,25 +2932,7 @@ function lqShowHostQuestion() {
   lqAnswersThisRound = {};
   lqQuestionStart = Date.now();
 
-  const qCounter = document.getElementById('lq-q-counter');
-  const qText    = document.getElementById('lq-host-question');
-  const qOpts    = document.getElementById('lq-host-opts');
-  const qAns     = document.getElementById('lq-answered-count');
-  const scoreMid = document.getElementById('lq-scoreboard-mid');
-  const nextBtn  = document.getElementById('lq-next-btn');
-
-  if (qCounter) qCounter.textContent = ` ${lqCurrentQ+1} / ${lqQuestions.length}`;
-  if (qText)    qText.innerHTML = lqProcessText(q.text);
-  if (qAns)     qAns.textContent  = ' 0';
-  if (scoreMid) scoreMid.classList.add('hidden');
-  if (nextBtn)  nextBtn.textContent = 'Ver respuestas →';
-
-  const letters = ['A','B','C','D'];
-  const colors  = ['lq-opt-red','lq-opt-blue','lq-opt-yellow','lq-opt-green'];
-  if (qOpts) qOpts.innerHTML = (q.options||[]).map((o,i) =>
-    `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${lqProcessText(o)}</div>`).join('');
-
-  // Publicar estado de pregunta en Presence (garantizado a todos)
+  // ── Publicar PRIMERO en Presence (garantiza que estudiantes lo reciban) ──
   lqChannel.track({
     type: 'host', phase: 'question',
     questionIdx: lqCurrentQ,
@@ -2960,6 +2942,27 @@ function lqShowHostQuestion() {
     timeSec: lqTimeSec,
     startTime: Date.now()
   });
+
+  // ── Después actualizar UI del profesor ──
+  const qCounter = document.getElementById('lq-q-counter');
+  const qText    = document.getElementById('lq-host-question');
+  const qOpts    = document.getElementById('lq-host-opts');
+  const qAns     = document.getElementById('lq-answered-count');
+  const scoreMid = document.getElementById('lq-scoreboard-mid');
+  const nextBtn  = document.getElementById('lq-next-btn');
+
+  if (qCounter) qCounter.textContent = ` ${lqCurrentQ+1} / ${lqQuestions.length}`;
+  if (qText)    { try { qText.innerHTML = lqProcessText(q.text); } catch(e) { qText.textContent = q.text; } }
+  if (qAns)     qAns.textContent  = ' 0';
+  if (scoreMid) scoreMid.classList.add('hidden');
+  if (nextBtn)  nextBtn.textContent = 'Ver respuestas →';
+
+  const letters = ['A','B','C','D'];
+  const colors  = ['lq-opt-red','lq-opt-blue','lq-opt-yellow','lq-opt-green'];
+  if (qOpts) qOpts.innerHTML = (q.options||[]).map((o,i) => {
+    try { return `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${lqProcessText(o)}</div>`; }
+    catch(e) { return `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${o}</div>`; }
+  }).join('');
 
   // Temporizador del host
   let t = lqTimeSec;
@@ -2972,6 +2975,7 @@ function lqShowHostQuestion() {
     if (t <= 0) { clearInterval(lqTimerInterval); lqTimeUp(); }
   }, 1000);
 }
+
 
 function lqTimeUp() {
   lqPhase = 'scores';
