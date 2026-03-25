@@ -18,6 +18,18 @@
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    /* Lucide icon sizing helpers */
+    .lucide { vertical-align: middle; }
+    .icon-sm { width:16px; height:16px; }
+    .icon-md { width:20px; height:20px; }
+    .icon-lg { width:28px; height:28px; }
+    .icon-xl { width:40px; height:40px; }
+    .icon-hero { width:56px; height:56px; }
+    .sidebar-icon svg, .sidebar-icon .lucide { width:18px; height:18px; vertical-align:middle; }
+  </style>
 </head>
 
 <body>
@@ -36,7 +48,7 @@
     <div class="view" id="view-auth">
       <div class="auth-container">
         <div class="auth-logo">
-          <div class="logo-icon">🎓</div>
+          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-hero"></i></div>
           <h1>Exam<span>App</span></h1>
           <p>Plataforma de Exámenes Educativos</p>
         </div>
@@ -91,7 +103,7 @@
       <!-- Navbar -->
       <nav class="navbar">
         <a class="navbar-logo" onclick="goHome()" href="#">
-          <div class="logo-icon">🎓</div>
+          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-md"></i></div>
           <span class="logo-text">Exam<span>App</span></span>
         </a>
         <div class="navbar-info">
@@ -100,20 +112,20 @@
             <span id="student-name-sm">Alumno</span>
           </div>
           <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"
-            id="theme-btn-student">☀️</button>
+            id="theme-btn-student"><i data-lucide="sun" class="icon-sm"></i></button>
           <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
         </div>
       </nav>
 
       <!-- Botón flotante de mensajes -->
       <button class="fab-msg" id="fab-msg-btn" onclick="openComposeModal()" title="Mensaje / Sugerencia">
-        💬
+        <i data-lucide="message-circle" class="icon-md"></i>
         <span class="fab-pulse"></span>
       </button>
 
       <!-- Botón flotante de quiz en vivo -->
-      <button class="fab-live" id="fab-live-btn" onclick="showStudentLiveSection()" title="⚡ Quiz en Vivo">
-        ⚡ En vivo
+      <button class="fab-live" id="fab-live-btn" onclick="showStudentLiveSection()" title="Quiz en Vivo">
+        <i data-lucide="zap" class="icon-sm"></i> En vivo
       </button>
 
       <div class="student-body">
@@ -127,9 +139,9 @@
               <span class="tag tag-section" id="student-display-section">Sin sección</span>
             </div>
             <div class="profile-actions">
-              <button class="btn btn-ghost btn-sm" onclick="openHistoryModal()">📊 Mi Historial</button>
-              <button class="btn btn-ghost btn-sm" onclick="openLeaderboardModal()">🏆 Ranking</button>
-              <button class="btn btn-ghost btn-sm" onclick="openChangePasswordModal()">🔑 Cambiar contraseña</button>
+              <button class="btn btn-ghost btn-sm" onclick="openHistoryModal()"><i data-lucide="bar-chart-2" class="icon-sm"></i> Mi Historial</button>
+              <button class="btn btn-ghost btn-sm" onclick="openLeaderboardModal()"><i data-lucide="trophy" class="icon-sm"></i> Ranking</button>
+              <button class="btn btn-ghost btn-sm" onclick="openChangePasswordModal()"><i data-lucide="key" class="icon-sm"></i> Cambiar contraseña</button>
             </div>
           </div>
         </div>
@@ -156,15 +168,15 @@
       <div class="slq-modal-drawer">
         <!-- Header del modal -->
         <div class="slq-modal-header">
-          <span style="font-size:1.2rem;font-weight:800;">⚡ Quiz en Vivo</span>
-          <button class="modal-close" onclick="slqCloseModal()">✕</button>
+          <span style="font-size:1.2rem;font-weight:800;"><i data-lucide="zap" class="icon-sm"></i> Quiz en Vivo</span>
+          <button class="modal-close" onclick="slqCloseModal()"><i data-lucide="x" class="icon-sm"></i></button>
         </div>
         <!-- Contenido principal del modal -->
         <div class="slq-modal-body">
 
           <!-- Pantalla: Ingresar código -->
           <div id="slq-join" style="display:flex;flex-direction:column;align-items:center;padding:2rem 0.5rem;">
-            <div style="font-size:3.5rem;margin-bottom:0.8rem;">⚡</div>
+            <div style="margin-bottom:0.8rem;"><i data-lucide="zap" class="icon-xl" style="color:var(--secondary);"></i></div>
             <h2 style="margin-bottom:0.4rem;font-size:1.4rem;">Unirse al quiz</h2>
             <p style="color:var(--text-muted);margin-bottom:1.5rem;text-align:center;">Ingresa el código que te dio tu profesor</p>
             <div style="display:flex;gap:0.8rem;">
@@ -178,11 +190,18 @@
 
           <!-- Pantalla: Sala de espera -->
           <div id="slq-waiting" class="hidden" style="text-align:center;padding:3rem 1rem;">
-            <div style="font-size:3.5rem;margin-bottom:1rem;" class="lq-pulse">⏳</div>
+            <div style="margin-bottom:1rem;" class="lq-pulse"><i data-lucide="hourglass" class="icon-xl" style="color:var(--secondary);"></i></div>
             <h2 style="font-size:1.4rem;">Esperando al profesor...</h2>
             <p style="color:var(--text-muted);margin-top:0.5rem;">El quiz empezará en cualquier momento</p>
             <p style="margin-top:1.5rem;">Sala: <strong id="slq-room-display" style="color:var(--primary-light);letter-spacing:0.25rem;font-size:1.2rem;"></strong></p>
             <button class="btn btn-ghost btn-sm" style="margin-top:2rem;" onclick="slqExit()">Cancelar</button>
+          </div>
+
+          <!-- Pantalla: Cuenta regresiva 3-2-1 -->
+          <div id="slq-countdown" class="hidden" style="text-align:center;padding:3rem 1rem;">
+            <p style="color:var(--text-muted);font-size:0.95rem;margin-bottom:1rem;">¡Prepárate!</p>
+            <div id="slq-countdown-num" style="font-size:8rem;font-weight:900;color:var(--secondary);line-height:1;transition:all 0.2s;">3</div>
+            <p id="slq-countdown-q" style="color:var(--text-muted);margin-top:1.2rem;font-size:0.88rem;"></p>
           </div>
 
           <!-- Pantalla: Pregunta activa -->
@@ -196,27 +215,32 @@
             <div id="slq-options" class="lq-student-opts"></div>
           </div>
 
-          <!-- Pantalla: Respuesta enviada -->
-          <div id="slq-answered" class="hidden" style="text-align:center;padding:2.5rem 1rem;">
-            <div id="slq-result-icon" style="font-size:4rem;margin-bottom:1rem;">⏳</div>
+          <!-- Pantalla: Respuesta enviada + Respuesta correcta -->
+          <div id="slq-answered" class="hidden" style="text-align:center;padding:2rem 1rem;">
+            <div id="slq-result-icon" style="font-size:4rem;margin-bottom:0.8rem;">⏳</div>
             <h2 id="slq-result-text" style="font-size:1.4rem;">Respuesta enviada</h2>
-            <p style="color:var(--text-muted);margin-top:0.5rem;">Esperando resultado del profesor...</p>
-            <div id="slq-points-gained" style="font-size:1.6rem;font-weight:800;color:var(--secondary);margin-top:1rem;"></div>
+            <p style="color:var(--text-muted);margin-top:0.3rem;font-size:0.9rem;">Esperando resultado del profesor...</p>
+            <div id="slq-points-gained" style="font-size:1.6rem;font-weight:800;color:var(--secondary);margin-top:0.8rem;"></div>
+            <!-- Respuesta correcta (aparece cuando el host muestra el marcador) -->
+            <div id="slq-correct-reveal" class="hidden" style="margin-top:1.2rem;padding:0.9rem 1.2rem;border-radius:12px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);">
+              <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.3rem;">✅ Respuesta correcta:</p>
+              <p id="slq-correct-text" style="font-weight:700;font-size:1rem;"></p>
+            </div>
           </div>
 
           <!-- Pantalla: Marcador entre preguntas -->
           <div id="slq-scoreboard" class="hidden" style="padding:0.5rem 0;">
-            <h3 style="text-align:center;margin-bottom:1rem;">🏆 Marcador</h3>
+            <h3 style="text-align:center;margin-bottom:1rem;"><i data-lucide="trophy" class="icon-md"></i> Marcador</h3>
             <div id="slq-score-rows"></div>
             <p style="text-align:center;color:var(--text-muted);margin-top:1rem;font-size:0.85rem;">Esperando la siguiente pregunta...</p>
           </div>
 
           <!-- Pantalla: Final -->
           <div id="slq-final" class="hidden" style="text-align:center;padding:2rem 0;">
-            <div style="font-size:3.5rem;margin-bottom:0.5rem;">🎉</div>
+            <div style="margin-bottom:0.5rem;"><i data-lucide="party-popper" class="icon-xl" style="color:var(--secondary);"></i></div>
             <h2 style="margin-bottom:1.5rem;font-size:1.4rem;">¡Quiz terminado!</h2>
             <div id="slq-final-podium" class="lq-podium"></div>
-            <button class="btn btn-primary" style="margin-top:2rem;" onclick="slqExit()">🏠 Cerrar</button>
+            <button class="btn btn-primary" style="margin-top:2rem;" onclick="slqExit()"><i data-lucide="home" class="icon-sm"></i> Cerrar</button>
           </div>
 
         </div><!-- /.slq-modal-body -->
@@ -227,12 +251,12 @@
     <div class="view" id="view-exam">
       <nav class="navbar">
         <a class="navbar-logo" onclick="goHome()" href="#">
-          <div class="logo-icon">🎓</div>
+          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-md"></i></div>
           <span class="logo-text">Exam<span>App</span></span>
         </a>
         <div class="navbar-info">
           <span id="exam-nav-title" style="font-weight:700;font-size:0.95rem;"></span>
-          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()">☀️</button>
+          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"><i data-lucide="sun" class="icon-sm"></i></button>
         </div>
       </nav>
 
@@ -255,7 +279,8 @@
             <div id="feedback-box" class="hidden"></div>
           </div>
           <div class="exam-actions">
-            <button class="btn btn-ghost" id="btn-skip" onclick="skipQuestion()" style="display:none;">🔖 Saltar
+            <button class="btn btn-ghost" id="btn-skip" onclick="skipQuestion()" style="display:none;">
+              <i data-lucide="bookmark" class="icon-sm"></i> Saltar
             </button>
             <button class="btn btn-primary" id="btn-next" onclick="nextQuestion()">Siguiente →</button>
           </div>
@@ -294,9 +319,9 @@
             </div>
           </div>
           <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
-            <button class="btn btn-ghost" onclick="toggleReview()">🔍 Revisar respuestas</button>
-            <button class="btn btn-outline" onclick="retakeExam()">&#x1F504; Intentar de nuevo</button>
-            <button class="btn btn-primary" onclick="goHome()">🏠 Volver al inicio</button>
+            <button class="btn btn-ghost" onclick="toggleReview()"><i data-lucide="search" class="icon-sm"></i> Revisar respuestas</button>
+            <button class="btn btn-outline" onclick="retakeExam()"><i data-lucide="refresh-cw" class="icon-sm"></i> Intentar de nuevo</button>
+            <button class="btn btn-primary" onclick="goHome()"><i data-lucide="home" class="icon-sm"></i> Volver al inicio</button>
           </div>
           <!-- Revisión de preguntas -->
           <div id="review-section" class="hidden" style="margin-top:1.5rem;"></div>
@@ -308,20 +333,20 @@
     <div class="view" id="view-admin">
       <nav class="navbar">
         <a class="navbar-logo" onclick="goHome()" href="#">
-          <div class="logo-icon">🎓</div>
+          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-md"></i></div>
           <span class="logo-text">Exam<span>App</span></span>
         </a>
         <div class="navbar-info">
           <div class="user-badge">
-            <div class="user-avatar" id="admin-avatar">👑</div>
+            <div class="user-avatar" id="admin-avatar"><i data-lucide="crown" class="icon-sm"></i></div>
             <div style="display:flex;flex-direction:column;line-height:1.2;">
               <span id="admin-role-label" style="font-size:0.72rem;color:var(--text-muted);">Administrador</span>
               <span id="admin-name-label" style="font-size:0.88rem;font-weight:700;"></span>
             </div>
           </div>
           <button class="btn btn-ghost btn-sm" title="Cambiar contraseña"
-            onclick="openChangePasswordModal()">🔑</button>
-          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()">☀️</button>
+            onclick="openChangePasswordModal()"><i data-lucide="key" class="icon-sm"></i></button>
+          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"><i data-lucide="sun" class="icon-sm"></i></button>
           <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
         </div>
       </nav>
@@ -332,31 +357,31 @@
           <div class="sidebar-section">Panel</div>
           <nav class="sidebar-nav">
             <button class="sidebar-item active" id="nav-overview" onclick="showPanel('overview')">
-              <span class="sidebar-icon">📊</span> Resumen
+              <span class="sidebar-icon"><i data-lucide="layout-dashboard"></i></span> Resumen
             </button>
             <button class="sidebar-item" id="nav-analytics" onclick="showPanel('analytics')">
-              <span class="sidebar-icon">📈</span> Analíticas
+              <span class="sidebar-icon"><i data-lucide="trending-up"></i></span> Analíticas
             </button>
             <div class="sidebar-section">Gestión</div>
             <button class="sidebar-item" id="nav-students" onclick="showPanel('students')">
-              <span class="sidebar-icon">👥</span> Alumnos
+              <span class="sidebar-icon"><i data-lucide="users"></i></span> Alumnos
             </button>
             <button class="sidebar-item" id="nav-exams" onclick="showPanel('exams')">
-              <span class="sidebar-icon">📝</span> Exámenes
+              <span class="sidebar-icon"><i data-lucide="file-text"></i></span> Exámenes
             </button>
             <button class="sidebar-item" id="nav-material" onclick="showPanel('material')">
-              <span class="sidebar-icon">📚</span> Material
+              <span class="sidebar-icon"><i data-lucide="book-open"></i></span> Material
             </button>
             <button class="sidebar-item" id="nav-announcements" onclick="showPanel('announcements')">
-              <span class="sidebar-icon">📢</span> Anuncios
+              <span class="sidebar-icon"><i data-lucide="megaphone"></i></span> Anuncios
             </button>
             <button class="sidebar-item" id="nav-messages" onclick="showPanel('messages');loadInbox()">
-              <span class="sidebar-icon">📬</span> Mensajes
+              <span class="sidebar-icon"><i data-lucide="inbox"></i></span> Mensajes
               <span class="msg-badge hidden" id="msg-badge">0</span>
             </button>
             <div class="sidebar-section">Herramientas</div>
             <button class="sidebar-item" id="nav-live" onclick="showPanel('live');initLivePanel()">
-              <span class="sidebar-icon">⚡</span> Quiz en Vivo
+              <span class="sidebar-icon"><i data-lucide="zap"></i></span> Quiz en Vivo
             </button>
           </nav>
         </aside>
@@ -368,7 +393,7 @@
           <div class="admin-panel active" id="panel-overview">
             <h1 class="section-title" style="margin-bottom:1.5rem;">Resumen general</h1>
             <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
-              <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📊 Descargar CSV</button>
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i data-lucide="download" class="icon-sm"></i> Descargar CSV</button>
             </div>
             <div class="stats-grid" id="admin-stats"></div>
             <h2 class="section-title">Actividad reciente</h2>
@@ -379,7 +404,7 @@
 
           <!-- Panel: Analíticas -->
           <div class="admin-panel" id="panel-analytics">
-            <h1 class="section-title" style="margin-bottom:1.5rem;">📈 Analíticas de rendimiento</h1>
+            <h1 class="section-title" style="margin-bottom:1.5rem;"><i data-lucide="trending-up" class="icon-md"></i> Analíticas de rendimiento</h1>
             <div class="form-group" style="max-width:300px;margin-bottom:1.5rem;">
               <label class="form-label">Filtrar por examen</label>
               <select class="form-input" id="analytics-exam-filter" onchange="renderAnalytics()">
@@ -415,7 +440,7 @@
             <!-- Barra de filtros -->
             <div class="filter-bar">
               <div class="filter-search-wrap">
-                <span class="filter-icon">🔍</span>
+                <span class="filter-icon"><i data-lucide="search" class="icon-sm"></i></span>
                 <input class="form-input" type="text" id="filter-search" placeholder="Buscar por nombre o correo..."
                   oninput="applyStudentFilters()" />
               </div>

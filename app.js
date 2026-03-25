@@ -574,9 +574,9 @@ async function renderStudent() {
         ? renderSingleExamCard(g[0], logs)
         : renderExamGroupCard(title, g, logs, gIdx);
     });
-    grid.innerHTML = html || '<div class="no-exams"><div class="no-exams-icon">📫</div><p>No hay exámenes disponibles aún.</p></div>';
+    grid.innerHTML = html || '<div class="no-exams"><div class="no-exams-icon"><i data-lucide="package-open" class="icon-xl"></i></div><p>No hay exámenes disponibles aún.</p></div>';
   } catch (e) {
-    grid.innerHTML = `<div class="no-exams"><div class="no-exams-icon">⚠️</div><p>${e.message}</p></div>`;
+    grid.innerHTML = `<div class="no-exams"><div class="no-exams-icon"><i data-lucide="alert-triangle" class="icon-xl"></i></div><p>${e.message}</p></div>`;
   }
 }
 
@@ -585,10 +585,10 @@ function lockedMsg() {
 }
 
 function scoreTag(pct) {
-  if (pct === 100) return `<span class="exam-score-badge score-perfect">⭐ 100%</span>`;
-  if (pct >= 70) return `<span class="exam-score-badge score-high">✅ ${pct}%</span>`;
-  if (pct >= 40) return `<span class="exam-score-badge score-mid">⚠️ ${pct}%</span>`;
-  return `<span class="exam-score-badge score-low">❌ ${pct}%</span>`;
+  if (pct === 100) return `<span class="exam-score-badge score-perfect"><i data-lucide="star" class="icon-sm"></i> 100%</span>`;
+  if (pct >= 70) return `<span class="exam-score-badge score-high"><i data-lucide="check-circle" class="icon-sm"></i> ${pct}%</span>`;
+  if (pct >= 40) return `<span class="exam-score-badge score-mid"><i data-lucide="alert-triangle" class="icon-sm"></i> ${pct}%</span>`;
+  return `<span class="exam-score-badge score-low"><i data-lucide="x-circle" class="icon-sm"></i> ${pct}%</span>`;
 }
 
 // ===== HELPERS DE AGRUPACIÓN =====
@@ -606,8 +606,8 @@ function renderSingleExamCard(exam, logs) {
   const scoreHtml = lastLog ? scoreTag(lastLog.pct) : '<span class="exam-score-badge score-none">Sin intentos</span>';
   return `
     <div class="exam-card ${!exam.allowed ? 'exam-locked' : ''}" onclick="${exam.allowed ? `startExam('${exam.id}')` : 'lockedMsg()'}">
-      ${!exam.allowed ? '<span class="locked-badge">🔒 Bloqueado</span>' : ''}
-      <div class="exam-card-icon">${exam.icon || '📋'}</div>
+      ${!exam.allowed ? '<span class="locked-badge"><i data-lucide="lock" class="icon-sm"></i> Bloqueado</span>' : ''}
+      <div class="exam-card-icon">${exam.icon === '📋' ? '<i data-lucide="file-text" class="icon-md"></i>' : exam.icon}</div>
       <h3>${exam.title}</h3>
       <p>${exam.description || ''}</p>
       <div class="exam-card-footer">
@@ -630,7 +630,7 @@ function renderExamGroupCard(title, exams, logs, gIdx) {
     return `
       <div class="exam-unit-row ${!exam.allowed ? 'exam-locked' : ''}" onclick="${exam.allowed ? `startExam('${exam.id}')` : 'lockedMsg()'}">
         <div class="exam-unit-left">
-          <span class="exam-unit-icon">${!exam.allowed ? '🔒' : '📝'}</span>
+          <span class="exam-unit-icon">${!exam.allowed ? '<i data-lucide="lock" class="icon-sm"></i>' : '<i data-lucide="file-text" class="icon-sm"></i>'}</span>
           <div>
             <div class="exam-unit-name">${unit}</div>
             ${!exam.allowed ? '<div class="exam-unit-status">Bloqueado</div>' : `<div class="exam-unit-questions">${exam.questions.length} preguntas</div>`}
@@ -643,12 +643,12 @@ function renderExamGroupCard(title, exams, logs, gIdx) {
   return `
     <div class="exam-group-card">
       <div class="exam-group-header" onclick="toggleExamGroup(${gIdx})">
-        <div class="exam-card-icon" style="margin-bottom:0;flex-shrink:0;">${icon}</div>
+        <div class="exam-card-icon" style="margin-bottom:0;flex-shrink:0;">${icon === '📚' ? '<i data-lucide="book-open" class="icon-md"></i>' : icon}</div>
         <div class="exam-group-info">
           <h3>${title}</h3>
           <p>${exams.length} unidades · ${anyAllowed ? 'Alguna disponible' : 'Todas bloqueadas'}</p>
         </div>
-        <span class="exam-group-arrow" id="group-arrow-${gIdx}">▼</span>
+        <span class="exam-group-arrow" id="group-arrow-${gIdx}"><i data-lucide="chevron-down" class="icon-sm"></i></span>
       </div>
       <div class="exam-group-body hidden" id="group-body-${gIdx}">
         ${unitRows}
@@ -1379,7 +1379,7 @@ async function quickTogglePerm(email, examId, value) {
   try {
     await api('PUT', `/api/users/${encodeURIComponent(email)}/permissions`, { allowedExams: perms });
     student.allowedExams = perms; // actualizar caché local
-    toast(value ? '✅ Permiso otorgado' : '🔒 Permiso revocado', value ? 'success' : 'info');
+    toast(value ? 'Permiso otorgado' : 'Permiso revocado', value ? 'success' : 'info');
   } catch (e) {
     toast(e.message, 'error');
     renderAdmin();
@@ -1404,7 +1404,7 @@ async function toggleModulePerm(email, examIds, grant) {
     student.allowed_exams = perms;
     // Refrescar la tabla para actualizar los toggles individuales
     renderStudentsTable(cachedStudents, cachedExams);
-    toast(grant ? `✅ Módulo completo desbloqueado` : `🔒 Módulo completo bloqueado`, grant ? 'success' : 'info');
+    toast(grant ? `Módulo completo desbloqueado` : `Módulo completo bloqueado`, grant ? 'success' : 'info');
   } catch (e) {
     toast(e.message, 'error');
     renderAdmin();
@@ -1462,12 +1462,13 @@ async function openEditStudent(email) {
     const on = (user.allowedExams || []).includes(e.id);
     const unit = titleCount[e.title] > 1 ? extractUnit(e.description) : null;
     const label = unit ? `${e.title} <span class="perm-unit-tag">${unit}</span>` : e.title;
+    const iHtml = e.icon === '📋' ? '<i data-lucide="file-text" class="icon-sm"></i>' : e.icon;
     return `<div class="perm-exam-row">
       <label class="toggle-switch">
         <input type="checkbox" id="mperm-${e.id}" ${on ? 'checked' : ''}/>
         <span class="toggle-slider"></span>
       </label>
-      <span>${e.icon || '📋'} ${label}</span>
+      <span>${iHtml || '<i data-lucide="file-text" class="icon-sm"></i>'} ${label}</span>
     </div>`;
   }).join('') || '<span style="color:var(--text-muted);font-size:0.85rem;">No hay exámenes creados.</span>';
 
@@ -1753,13 +1754,13 @@ function addQuestionBlock(data) {
     <div class="question-block" id="qblock-${idx}">
       <div class="question-block-header">
         <span class="question-block-num">Pregunta ${idx}</span>
-        <button class="btn btn-danger btn-sm" onclick="removeQuestion(${idx})">&#x2715;</button>
+        <button class="btn btn-danger btn-sm" onclick="removeQuestion(${idx})"><i data-lucide="trash-2" class="icon-sm"></i></button>
       </div>
       <div class="form-group">
         <input class="form-input" type="text" id="q-text-${idx}" placeholder="Escribe la pregunta aquí..." value="${data ? escapeAttr(data.text) : ''}"/>
       </div>
       <div class="form-group" style="margin-top:0.3rem;">
-        <label class="form-label" style="font-size:0.78rem;color:var(--primary);">📸 Imagen (URL, opcional)</label>
+        <label class="form-label" style="font-size:0.78rem;color:var(--primary);"><i data-lucide="image" class="icon-sm"></i> Imagen (URL, opcional)</label>
         <div style="display:flex;gap:0.5rem;align-items:center;">
           <input class="form-input" type="url" id="q-img-${idx}" placeholder="https://... (pega la URL de la imagen)"
             value="${escapeAttr(img)}" style="flex:1;font-size:0.82rem;"
@@ -1775,10 +1776,10 @@ function addQuestionBlock(data) {
             <label for="radio-${idx}-${i}" style="font-weight:700;font-size:0.85rem;color:var(--secondary);min-width:1.5rem;margin-top:0.4rem;">${letters[i]}</label>
             <textarea class="form-input option-input" id="q-opt-${idx}-${i}" placeholder="Opción ${letters[i]}" rows="1" style="resize:vertical;min-height:38px;">${escapeAttr(opt)}</textarea>
           </div>`).join('')}
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;">&#x1F7E2; Selecciona el radio de la respuesta correcta. Puedes usar LaTeX ($...$).</p>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;"><i data-lucide="check-circle" class="icon-sm" style="color:var(--secondary)"></i> Selecciona el radio de la respuesta correcta. Puedes usar LaTeX ($...$).</p>
       </div>
       <div class="form-group" style="margin-top:0.6rem;">
-        <label class="form-label" style="font-size:0.78rem;color:var(--secondary);">&#x1F4A1; Justificación (por qué es correcta)</label>
+        <label class="form-label" style="font-size:0.78rem;color:var(--secondary);"><i data-lucide="lightbulb" class="icon-sm"></i> Justificación (por qué es correcta)</label>
         <textarea class="form-input" id="q-just-${idx}" rows="2"
           style="resize:vertical;font-size:0.83rem;"
           placeholder="Explica brevemente por qué la respuesta marcada es la correcta...">${escapeAttr(just)}</textarea>
@@ -1874,11 +1875,17 @@ document.addEventListener('click', e => {
 // ===== TOAST =====
 function toast(msg, type = 'info') {
   const container = document.getElementById('toast-container');
-  const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+  const icons = { 
+    success: '<i data-lucide="check-circle" class="icon-md" style="color:var(--secondary)"></i>', 
+    error: '<i data-lucide="x-circle" class="icon-md" style="color:var(--danger)"></i>', 
+    info: '<i data-lucide="info" class="icon-md" style="color:var(--primary)"></i>', 
+    warning: '<i data-lucide="alert-triangle" class="icon-md" style="color:#eab308"></i>' 
+  };
   const el = document.createElement('div');
   el.className = `toast toast-${type}`;
-  el.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${msg}</span>`;
+  el.innerHTML = `<span>${icons[type] || icons.info}</span><span>${msg}</span>`;
   container.appendChild(el);
+  if (window.lucide) window.lucide.createIcons({ root: el });
   setTimeout(() => {
     el.style.opacity = '0';
     el.style.transform = 'translateX(120%)';
@@ -1900,8 +1907,9 @@ document.addEventListener('keydown', e => {
 function syncThemeIcons() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   document.querySelectorAll('.theme-toggle-btn').forEach(b => {
-    b.textContent = isLight ? '🌙' : '☀️';
+    b.innerHTML = isLight ? '<i data-lucide="moon" class="icon-sm"></i>' : '<i data-lucide="sun" class="icon-sm"></i>';
   });
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function toggleTheme() {
@@ -1927,7 +1935,7 @@ function toggleReview() {
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
   section.innerHTML = examState.questionResults.map((r, i) => {
     const justHTML = r.justification
-      ? `<div class="review-justification">💡 <strong>Justificación:</strong> ${lqProcessText(r.justification)}</div>`
+      ? `<div class="review-justification"><i data-lucide="lightbulb" class="icon-sm" style="color:var(--secondary)"></i> <strong>Justificación:</strong> ${lqProcessText(r.justification)}</div>`
       : '';
     return `
     <div class="review-item ${r.isRight ? 'review-correct' : 'review-wrong'}">
@@ -2556,8 +2564,8 @@ async function loadInbox() {
   // Render tabs + toolbar skeleton first
   container.innerHTML = `
     <div class="inbox-tabs">
-      <button class="inbox-tab active" id="inbox-tab-inbox" onclick="setInboxView('inbox')">📥 Recibidos</button>
-      <button class="inbox-tab" id="inbox-tab-arch" onclick="setInboxView('archived')">📦 Archivados</button>
+      <button class="inbox-tab active" id="inbox-tab-inbox" onclick="setInboxView('inbox')"><i data-lucide="inbox" class="icon-sm"></i> Recibidos</button>
+      <button class="inbox-tab" id="inbox-tab-arch" onclick="setInboxView('archived')"><i data-lucide="archive" class="icon-sm"></i> Archivados</button>
     </div>
     <div id="inbox-toolbar" class="inbox-toolbar hidden"></div>
     <div id="inbox-messages"><p style="color:var(--text-muted);text-align:center;padding:2rem;">Cargando...</p></div>`;
@@ -2573,7 +2581,8 @@ async function loadInbox() {
     const toolbar = document.getElementById('inbox-toolbar');
 
     if (!msgs.length) {
-      msgDiv.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:3rem;">${inboxView === 'archived' ? '📦 No hay mensajes archivados.' : '📭 No tienes mensajes nuevos.'}</p>`;
+      msgDiv.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:3rem;">${inboxView === 'archived' ? '<i data-lucide="archive" class="icon-lg"></i><br>No hay mensajes archivados.' : '<i data-lucide="mail-open" class="icon-lg"></i><br>No tienes mensajes nuevos.'}</p>`;
+      if (window.lucide) window.lucide.createIcons({ root: msgDiv });
       return;
     }
 
@@ -2586,24 +2595,24 @@ async function loadInbox() {
       </label>
       <div class="inbox-actions" id="inbox-bulk-actions" style="display:none;">
         ${inboxView === 'inbox'
-        ? `<button class="btn btn-ghost btn-sm" onclick="archiveSelectedMessages()">📦 Archivar</button>`
-        : `<button class="btn btn-ghost btn-sm" onclick="archiveSelectedMessages(false)">📥 Mover a recibidos</button>`}
-        <button class="btn btn-danger btn-sm" onclick="deleteSelectedMessages()">🗑️ Eliminar</button>
+        ? `<button class="btn btn-ghost btn-sm" onclick="archiveSelectedMessages()"><i data-lucide="archive" class="icon-sm"></i> Archivar</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="archiveSelectedMessages(false)"><i data-lucide="inbox" class="icon-sm"></i> Mover a recibidos</button>`}
+        <button class="btn btn-danger btn-sm" onclick="deleteSelectedMessages()"><i data-lucide="trash-2" class="icon-sm"></i> Eliminar</button>
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="emptyInbox()">
-        ${inboxView === 'archived' ? '🗑️ Vaciar archivo' : '🗑️ Vaciar bandeja'}
+        <i data-lucide="trash-2" class="icon-sm"></i> ${inboxView === 'archived' ? 'Vaciar archivo' : 'Vaciar bandeja'}
       </button>`;
 
     // Message cards
     msgDiv.innerHTML = msgs.map(m => {
       const date = new Date(m.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const badge = m.type === 'suggestion'
-        ? '<span class="msg-type-badge suggestion">💡 Sugerencia</span>'
-        : '<span class="msg-type-badge message">💬 Mensaje</span>';
+        ? '<span class="msg-type-badge suggestion"><i data-lucide="lightbulb" class="icon-sm" style="margin-right:0.2rem;"></i> Sugerencia</span>'
+        : '<span class="msg-type-badge message"><i data-lucide="message-circle" class="icon-sm" style="margin-right:0.2rem;"></i> Mensaje</span>';
       const unreadDot = (!m.is_read && !m.archived) ? '<span class="msg-unread-dot"></span>' : '';
       const archBtn = inboxView === 'inbox'
-        ? `<button class="btn btn-ghost btn-sm inbox-action-btn" title="Archivar" onclick="event.stopPropagation();archiveMessage(${m.id})">📦</button>`
-        : `<button class="btn btn-ghost btn-sm inbox-action-btn" title="Mover a recibidos" onclick="event.stopPropagation();archiveMessage(${m.id}, false)">📥</button>`;
+        ? `<button class="btn btn-ghost btn-sm inbox-action-btn" title="Archivar" onclick="event.stopPropagation();archiveMessage(${m.id})"><i data-lucide="archive" class="icon-sm"></i></button>`
+        : `<button class="btn btn-ghost btn-sm inbox-action-btn" title="Mover a recibidos" onclick="event.stopPropagation();archiveMessage(${m.id}, false)"><i data-lucide="inbox" class="icon-sm"></i></button>`;
       return `
         <div class="inbox-card ${m.is_read ? '' : 'inbox-unread'}" id="msg-card-${m.id}">
           <div class="inbox-card-inner">
@@ -2623,11 +2632,15 @@ async function loadInbox() {
             </div>
             <div class="inbox-card-btns">
               ${archBtn}
-              <button class="btn btn-danger btn-sm inbox-action-btn" title="Eliminar" onclick="event.stopPropagation();deleteMessage(${m.id})">🗑️</button>
+              <button class="btn btn-danger btn-sm inbox-action-btn" title="Eliminar" onclick="event.stopPropagation();deleteMessage(${m.id})"><i data-lucide="trash-2" class="icon-sm"></i></button>
             </div>
           </div>
         </div>`;
     }).join('');
+
+    if (window.lucide) {
+      window.lucide.createIcons({ root: container });
+    }
 
     // Mark unread as read after delay
     msgs.filter(m => !m.is_read && inboxView === 'inbox').forEach(m => {
@@ -2774,7 +2787,9 @@ let slqMyEmail   = '';
 let slqMyName    = '';
 let slqTimerInterval = null;
 let slqAnswered  = false;
-let slqLastQuestionIdx = -1; // para detectar nueva pregunta y resetear slqAnswered
+let slqLastQuestionIdx = -1;
+let slqCurrentOptions  = []; // opciones de la pregunta actual (para mostrar respuesta correcta)
+
 
 // ── Helpers ──────────────────────────────────────────────────
 function lqGenCode() {
@@ -2791,12 +2806,52 @@ function lqShow(phase) {
 }
 
 function slqShow(phase) {
-  ['slq-join','slq-waiting','slq-question','slq-answered','slq-scoreboard','slq-final'].forEach(id => {
+  ['slq-join','slq-waiting','slq-countdown','slq-question','slq-answered','slq-scoreboard','slq-final'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
   const t = document.getElementById(phase);
   if (t) t.classList.remove('hidden');
+}
+
+// ── Motor de sonidos (Web Audio API) ────────────────────────────
+function lqSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const g   = ctx.createGain();
+    g.connect(ctx.destination);
+    const play = (freq, type2, start, dur, vol = 0.3) => {
+      const o = ctx.createOscillator();
+      o.type = type2;
+      o.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      o.connect(g);
+      g.gain.setValueAtTime(vol, ctx.currentTime + start);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      o.start(ctx.currentTime + start);
+      o.stop(ctx.currentTime + start + dur);
+    };
+    if (type === 'tick')      { play(900, 'sine', 0, 0.08, 0.15); }
+    if (type === 'tick-last') { play(1100, 'sine', 0, 0.12, 0.25); }
+    if (type === 'correct') {
+      play(523, 'sine', 0,    0.15);
+      play(659, 'sine', 0.13, 0.15);
+      play(784, 'sine', 0.26, 0.3);
+    }
+    if (type === 'wrong') {
+      play(300, 'sawtooth', 0,    0.15, 0.25);
+      play(220, 'sawtooth', 0.15, 0.25, 0.2);
+    }
+    if (type === 'timeout')  { play(440, 'triangle', 0, 0.5, 0.2); }
+    if (type === 'countdown') { play(660, 'sine', 0, 0.12, 0.3); }
+    if (type === 'go')       {
+      play(523, 'sine', 0,    0.1);
+      play(784, 'sine', 0.12, 0.25);
+    }
+    if (type === 'final') {
+      [0, 0.15, 0.3, 0.45, 0.6].forEach((s, i) =>
+        play([523, 659, 784, 1047, 1318][i], 'sine', s, 0.2));
+    }
+  } catch(e) { /* AudioContext no disponible */ }
 }
 
 function lqRenderPodium(containerId, scores) {
@@ -2834,7 +2889,7 @@ function lqPreviewQuestions() {
   if (!qs.length) { toast('No se detectaron preguntas. Revisa el formato.', 'error'); return; }
   const el = document.getElementById('lq-preview');
   el.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:0.5rem;">${qs.length} pregunta(s) detectadas:</p>` +
-    qs.map((q,i) => `<p style="margin:0.3rem 0;font-size:0.88rem;">📝 <strong>${i+1}.</strong> ${q.text.slice(0,80)}${q.text.length>80?'…':''}</p>`).join('');
+    qs.map((q,i) => `<p style="margin:0.3rem 0;font-size:0.88rem;"><i data-lucide="edit-3" class="icon-sm"></i> <strong>${i+1}.</strong> ${q.text.slice(0,80)}${q.text.length>80?'…':''}</p>`).join('');
 }
 
 // ── ADMIN: Crear sala ────────────────────────────────────────
@@ -2915,7 +2970,10 @@ function lqUpdateLobby() {
 }
 
 function lqCancelSession() {
-  if (lqChannel) lqChannel.track({ type: 'host', phase: 'cancelled' });
+  if (lqChannel) {
+    lqChannel.track({ type: 'host', phase: 'cancelled' });
+    lqChannel.send({ type: 'broadcast', event: 'cancelled', payload: {} });
+  }
   setTimeout(() => lqReset(), 500);
 }
 
@@ -2995,6 +3053,9 @@ function lqTimeUp() {
 
   // Publicar marcador en Presence
   lqChannel.track({ type: 'host', phase: 'scores', scores, correctIdx: lqQuestions[lqCurrentQ]?.correct ?? -1 });
+  // Respaldo por Broadcast
+  lqChannel.send({ type: 'broadcast', event: 'scores',
+    payload: { scores, correctIdx: lqQuestions[lqCurrentQ]?.correct ?? -1 } });
 
   // Mostrar marcador en panel host
   const rowsEl  = document.getElementById('lq-scoreboard-rows');
@@ -3002,8 +3063,8 @@ function lqTimeUp() {
   const nextBtn = document.getElementById('lq-next-btn');
   if (rowsEl)  lqRenderScoreRows('lq-scoreboard-rows', scores);
   if (midEl)   midEl.classList.remove('hidden');
-  if (nextBtn) nextBtn.textContent =
-    lqCurrentQ + 1 < lqQuestions.length ? 'Siguiente pregunta →' : '🏆 Ver ganador';
+  if (nextBtn) nextBtn.innerHTML =
+    lqCurrentQ + 1 < lqQuestions.length ? 'Siguiente pregunta →' : '<i data-lucide="trophy" class="icon-sm"></i> Ver ganador';
 }
 
 function lqNextQuestion() {
@@ -3020,6 +3081,8 @@ function lqEndQuiz() {
   lqPhase = 'final';
   const scores = Object.values(lqPlayers).map(p => ({ name: p.name, score: p.score }));
   lqChannel.track({ type: 'host', phase: 'final', scores });
+  // Respaldo por Broadcast
+  lqChannel.send({ type: 'broadcast', event: 'final', payload: { scores } });
   lqShow('live-final');
   lqRenderPodium('lq-final-podium', scores);
 }
@@ -3087,15 +3150,16 @@ async function slqJoin() {
       if (!slqAnswered) {
         try {
           const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
-          slqRenderQuestion(h, elapsed);
-        } catch(e) { console.error('slqRenderQuestion (presence):', e); }
+          slqStartCountdown(h, elapsed);
+        } catch(e) { console.error('slqStartCountdown (presence):', e); }
       }
     } else if (h.phase === 'scores') {
       clearInterval(slqTimerInterval);
-      slqShow('slq-scoreboard');
-      lqRenderScoreRows('slq-score-rows', h.scores || []);
+      slqRevealCorrectAnswer(h.correctIdx ?? -1);
+      setTimeout(() => { slqShow('slq-scoreboard'); lqRenderScoreRows('slq-score-rows', h.scores || []); }, 2200);
     } else if (h.phase === 'final') {
       clearInterval(slqTimerInterval);
+      lqSound('final');
       slqShow('slq-final');
       lqRenderPodium('slq-final-podium', h.scores || []);
     } else if (h.phase === 'cancelled') {
@@ -3113,23 +3177,46 @@ async function slqJoin() {
       slqLastQuestionIdx = qIdx;
     }
     if (!slqAnswered) {
-
-        try {
-          const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
-          slqRenderQuestion(h, elapsed);
-        } catch(e) { console.error('slqRenderQuestion (broadcast):', e); }
+      try {
+        const elapsed = Math.round((Date.now() - (h.startTime || Date.now())) / 1000);
+        slqStartCountdown(h, elapsed);
+      } catch(e) { console.error('slqStartCountdown (broadcast):', e); }
     }
   });
 
+  slqChannel.on('broadcast', { event: 'scores' }, ({ payload: d }) => {
+    if (!d) return;
+    clearInterval(slqTimerInterval);
+    slqRevealCorrectAnswer(d.correctIdx ?? -1);
+    setTimeout(() => { slqShow('slq-scoreboard'); lqRenderScoreRows('slq-score-rows', d.scores || []); }, 2200);
+  });
+
+  slqChannel.on('broadcast', { event: 'final' }, ({ payload: d }) => {
+    if (!d) return;
+    clearInterval(slqTimerInterval);
+    lqSound('final');
+    slqShow('slq-final');
+    lqRenderPodium('slq-final-podium', d.scores || []);
+  });
+
+  slqChannel.on('broadcast', { event: 'cancelled' }, () => {
+    toast('El profesor canceló el quiz.', 'info');
+    slqExit();
+  });
 
   // ── Resultado de respuesta individual ───────────────────────────────────
   slqChannel.on('broadcast', { event: 'answer_result' }, ({ payload }) => {
     if (payload.email !== slqMyEmail) return;
     clearInterval(slqTimerInterval);
+    if (payload.correct) lqSound('correct'); else lqSound('wrong');
     slqShow('slq-answered');
-    document.getElementById('slq-result-icon').textContent = payload.correct ? '✅' : '❌';
+    document.getElementById('slq-result-icon').innerHTML = payload.correct ? '<i data-lucide="check-circle" class="icon-hero" style="color:var(--secondary)"></i>' : '<i data-lucide="x-octagon" class="icon-hero" style="color:var(--danger)"></i>';
+    if (window.lucide) window.lucide.createIcons({ root: document.getElementById('slq-result-icon') });
     document.getElementById('slq-result-text').textContent = payload.correct ? '¡Correcto!' : 'Incorrecto';
-    document.getElementById('slq-points-gained').textContent = payload.correct ? `+${payload.pts} puntos` : '';
+    document.getElementById('slq-points-gained').textContent = payload.correct ? `+${payload.pts} puntos` : '+0 puntos';
+    // Ocultar reveal hasta que llegue el marcador
+    const rev = document.getElementById('slq-correct-reveal');
+    if (rev) rev.classList.add('hidden');
   });
 
   await slqChannel.subscribe(async (status) => {
@@ -3258,21 +3345,67 @@ function slqRenderQuestion(h, elapsedSec) {
 
 // ── ALUMNO: Tiempo agotado ────────────────────────────────────
 function slqTimeOut() {
-  if (slqAnswered) return;  // ya respondió antes de que llegue este callback
+  if (slqAnswered) return;
   slqAnswered = true;
-  // Notificar al host que no respondió (índice -1 = sin respuesta)
+  lqSound('timeout');
   if (slqChannel) slqChannel.send({
     type: 'broadcast', event: 'answer',
     payload: { email: slqMyEmail, answerIdx: -1 }
   });
-  // Mostrar pantalla de tiempo agotado
   slqShow('slq-answered');
-  const iconEl  = document.getElementById('slq-result-icon');
-  const textEl  = document.getElementById('slq-result-text');
-  const ptsEl   = document.getElementById('slq-points-gained');
-  if (iconEl) iconEl.textContent  = '⏰';
-  if (textEl) textEl.textContent  = '¡Tiempo agotado!';
-  if (ptsEl)  ptsEl.textContent   = '+0 puntos';
+  document.getElementById('slq-result-icon').innerHTML = '<i data-lucide="clock" class="icon-hero" style="color:#eab308"></i>';
+  if (window.lucide) window.lucide.createIcons({ root: document.getElementById('slq-result-icon') });
+  document.getElementById('slq-result-text').textContent = '¡Tiempo agotado!';
+  document.getElementById('slq-points-gained').textContent = '+0 puntos';
+  const rev = document.getElementById('slq-correct-reveal');
+  if (rev) rev.classList.add('hidden');
+}
+
+// ── ALUMNO: Revelar respuesta correcta (llega con marcador) ────────────
+function slqRevealCorrectAnswer(correctIdx) {
+  if (correctIdx < 0 || !slqCurrentOptions[correctIdx]) return;
+  const letters = ['A','B','C','D'];
+  const answer  = `${letters[correctIdx]}) ${slqCurrentOptions[correctIdx]}`;
+  const rev  = document.getElementById('slq-correct-reveal');
+  const text = document.getElementById('slq-correct-text');
+  if (!rev || !text) return;
+  // Mostrar solo si el alumno está en la pantalla 'slq-answered'
+  const answeredPanel = document.getElementById('slq-answered');
+  if (answeredPanel && !answeredPanel.classList.contains('hidden')) {
+    text.innerHTML = lqProcessText(answer);
+    rev.classList.remove('hidden');
+  }
+}
+
+// ── ALUMNO: Cuenta regresiva 3-2-1 antes de la pregunta ────────────
+function slqStartCountdown(h, elapsedSec) {
+  // Si ya lleva más de 3 segundos transcurridos, mostrar directo
+  if (elapsedSec >= 3) { slqRenderQuestion(h, elapsedSec); return; }
+
+  slqShow('slq-countdown');
+  const numEl = document.getElementById('slq-countdown-num');
+  const qEl   = document.getElementById('slq-countdown-q');
+  if (qEl) qEl.textContent = `Pregunta ${(h.questionIdx||0)+1} de ${h.total||'?'}`;
+
+  let count = 3;
+  if (numEl) numEl.textContent = count;
+  lqSound('countdown');
+
+  const iv = setInterval(() => {
+    count--;
+    if (count <= 0) {
+      clearInterval(iv);
+      lqSound('go');
+      slqRenderQuestion(h, elapsedSec + 3);
+    } else {
+      if (numEl) {
+        numEl.style.transform = 'scale(1.4)';
+        numEl.textContent = count;
+        setTimeout(() => { numEl.style.transform = 'scale(1)'; }, 150);
+      }
+      lqSound('countdown');
+    }
+  }, 1000);
 }
 
 // ── ALUMNO: Enviar respuesta ─────────────────────────────────
@@ -3291,7 +3424,8 @@ function slqAnswer(idx) {
   });
 
   slqShow('slq-answered');
-  document.getElementById('slq-result-icon').textContent  = '⏳';
+  document.getElementById('slq-result-icon').innerHTML  = '<i data-lucide="hourglass" class="icon-hero" style="color:var(--primary-light)"></i>';
+  if (window.lucide) window.lucide.createIcons({ root: document.getElementById('slq-result-icon') });
   document.getElementById('slq-result-text').textContent  = 'Respuesta enviada';
   document.getElementById('slq-points-gained').textContent = 'Esperando resultado...';
 }
@@ -3318,3 +3452,18 @@ function lqParseQuestions(qRaw, aRaw) {
   }
   return qs;
 }
+// ── Inicialización global ───────────────────────────────────
+window.updateIcons = () => {
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  window.updateIcons();
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'light') toggleTheme();
+  currentUser = JSON.parse(localStorage.getItem('currentUser'));
+  if (currentUser) {
+    if (currentUser.role === 'admin') goView('view-admin');
+    else goView('view-student');
+  }
+});
