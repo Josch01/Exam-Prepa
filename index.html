@@ -1,27 +1,69 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ExamApp — Plataforma de Exámenes</title>
+  <title>ExamApp — Plataforma de Exámenes V2</title>
   <meta name="description" content="Plataforma educativa para creación y gestión de exámenes en línea." />
+  
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Tailwind config for custom colors & fonts -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'], outfit: ['Outfit', 'sans-serif'] },
+          colors: {
+            brand: { 400: '#9b87f5', 500: '#7E69AB', 600: '#6E59A5', 900: '#1A1F2C' },
+            accent: { purple: '#D6BCFA', pink: '#FBB6CE', blue: '#BEE3F8' }
+          },
+          animation: {
+            'blob': 'blob 7s infinite',
+            'float': 'float 6s ease-in-out infinite',
+            'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            blob: {
+              '0%': { transform: 'translate(0px, 0px) scale(1)' },
+              '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+              '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+              '100%': { transform: 'translate(0px, 0px) scale(1)' },
+            },
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-10px)' },
+            },
+            'pulse-glow': {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '.5' },
+            }
+          }
+        }
+      }
+    }
+  </script>
 
-  <!-- KaTeX for LaTeX Math Rendering -->
+  <!-- External Libraries -->
+  <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-  <!-- Chart.js for Analytics -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+  <!-- Estilos base y remanentes -->
+  <link rel="stylesheet" href="style.css" />
+  
   <style>
-    /* Lucide icon sizing helpers */
     .lucide { vertical-align: middle; }
     .icon-sm { width:16px; height:16px; }
     .icon-md { width:20px; height:20px; }
@@ -29,983 +71,1431 @@
     .icon-xl { width:40px; height:40px; }
     .icon-hero { width:56px; height:56px; }
     .sidebar-icon svg, .sidebar-icon .lucide { width:18px; height:18px; vertical-align:middle; }
+    
+    /* V2 Utilities */
+    .glass-panel { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+    .glass-header { background: rgba(26, 31, 44, 0.4); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    .glass-card { background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3); }
+    .animation-delay-2000 { animation-delay: 2s; }
+    .animation-delay-4000 { animation-delay: 4s; }
+    ::selection { background-color: #9b87f5; color: #ffffff; }
+    
+    /* Manejo del .active de app.js en the switchAuthTab */
+    .auth-tab { color: #9ca3af; background: transparent; }
+    .auth-tab.active { color: #ffffff; background: rgba(255,255,255,0.1); }
+    
+    /* Custom Select Component Styles */
+    .custom-select-container { position: relative; width: 100%; z-index: 40; }
+    .custom-select-container:focus-within { z-index: 60; }
+    
+    /* Asegurar que los contenedores de los filtros no corten el dropdown */
+    #container-filter-section, #container-filter-role, #container-analytics-exam-filter {
+        overflow: visible !important;
+    }
+    
+    .custom-select-trigger {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .custom-select-options {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        z-index: 100;
+        max-height: 200px; /* Reducir un poco más para asegurar que se vea el scroll si hay muchos */
+        overflow-y: overlay !important; /* Usar overlay para no ocupar espacio */
+        overflow-y: auto !important;
+        opacity: 0;
+        transform: translateY(-10px);
+        pointer-events: none;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        background: rgba(13, 17, 26, 0.98); 
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+    }
+    /* Scrollbar mucho más visible */
+    .custom-select-options::-webkit-scrollbar { width: 6px; display: block !important; }
+    .custom-select-options::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+    .custom-select-options::-webkit-scrollbar-thumb { background: rgba(155, 135, 245, 0.8); border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.1); }
+    
+    .custom-select-options.active {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+    .custom-select-option {
+        padding: 10px 16px;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .custom-select-option:hover {
+        background: rgba(155, 135, 245, 0.15);
+        color: #9b87f5;
+    }
+    .custom-select-option.selected {
+        background: rgba(155, 135, 245, 0.2);
+        color: white;
+        font-weight: 600;
+    }
+
+    /* ============================================================ */
+    /*  LIGHT THEME (SOPHISTICATED FUTURISTIC GRAY) OVERRIDES       */
+    /* ============================================================ */
+    [data-theme="light"] {
+        --bg: #cbd5e1; /* Distinct Slate 300 - Clearly GRAY, not white */
+        --bg-gradient: radial-gradient(circle at top right, #e2e8f0, #cbd5e1);
+        --card-bg: rgba(255, 255, 255, 0.45);
+        --panel-bg: rgba(255, 255, 255, 0.35);
+        --text-primary: #0f172a; /* Slate 900 */
+        --text-secondary: #334155; /* Slate 700 */
+        --border-color: rgba(71, 85, 105, 0.25); /* Stronger slate border */
+        --glass-blur: blur(25px);
+    }
+
+    [data-theme="light"] body {
+        background: var(--bg-gradient) !important;
+        background-attachment: fixed !important;
+        color: var(--text-primary) !important;
+    }
+
+    [data-theme="light"] .glass-card {
+        background: var(--card-bg) !important;
+        backdrop-filter: var(--glass-blur) !important;
+        -webkit-backdrop-filter: var(--glass-blur) !important;
+        border-color: var(--border-color) !important;
+        box-shadow: 
+            0 10px 25px -5px rgba(0, 0, 0, 0.08), 
+            inset 0 0 40px rgba(255,255,255,0.7) !important; 
+    }
+
+    [data-theme="light"] .glass-panel {
+        background: var(--panel-bg) !important;
+        backdrop-filter: var(--glass-blur) !important;
+        border-color: var(--border-color) !important;
+    }
+
+    [data-theme="light"] .glass-header {
+        background: rgba(255, 255, 255, 0.6) !important;
+        backdrop-filter: var(--glass-blur) !important;
+        border-bottom: 2px solid var(--border-color) !important;
+    }
+
+    [data-theme="light"] #view-auth {
+        background: var(--bg) !important;
+    }
+
+    /* Noise & Blobs for Futuristic Light Mode */
+    [data-theme="light"] .animate-blob {
+        mix-blend-mode: multiply !important;
+        opacity: 0.2 !important;
+    }
+    
+    [data-theme="light"] .bg-\[url\(\'https\:\/\/grainy-gradients\.vercel\.app\/noise\.svg\'\)\] {
+        filter: contrast(120%) opacity(0.3) !important;
+    }
+
+    /* Text & Colors */
+    [data-theme="light"] .text-white, 
+    [data-theme="light"] .text-gray-100 {
+        color: var(--text-primary) !important;
+    }
+
+    [data-theme="light"] .text-gray-200,
+    [data-theme="light"] .text-gray-300,
+    [data-theme="light"] .text-gray-400 {
+        color: var(--text-secondary) !important;
+    }
+
+    /* Custom Dropdowns */
+    [data-theme="light"] .custom-select-trigger {
+        background: rgba(255, 255, 255, 0.75) !important;
+        backdrop-filter: blur(15px) !important;
+        border-color: var(--border-color) !important;
+        color: var(--text-primary) !important;
+    }
+
+    [data-theme="light"] .custom-select-options {
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(30px) !important;
+        border-color: var(--border-color) !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    [data-theme="light"] .custom-select-option:hover {
+        background: rgba(126, 105, 171, 0.2) !important;
+        color: #5B4A8C !important;
+    }
+    
+    /* Tables and inputs */
+    [data-theme="light"] .admin-tailwind-table thead {
+        background: rgba(0,0,0,0.08) !important;
+    }
+    
+    [data-theme="light"] input, 
+    [data-theme="light"] textarea, 
+    [data-theme="light"] select {
+        background: rgba(255, 255, 255, 0.65) !important;
+        color: var(--text-primary) !important;
+        border-color: var(--border-color) !important;
+    }
+
+    [data-theme="light"] input::placeholder {
+        color: #475569 !important;
+    }
+
+    /* Background Overrides */
+    [data-theme="light"] .bg-brand-900 {
+        background-color: var(--bg) !important;
+    }
+    
+    [data-theme="light"] .bg-black\/20,
+    [data-theme="light"] .bg-black\/30,
+    [data-theme="light"] .bg-black\/40,
+    [data-theme="light"] .bg-black\/50,
+    [data-theme="light"] .bg-black\/60,
+    [data-theme="light"] .bg-black\/80 {
+        background-color: rgba(15, 23, 42, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    [data-theme="light"] .bg-white\/5 {
+        background-color: rgba(15, 23, 42, 0.05) !important;
+    }
+
+    /* Avatar & Brand Colors */
+    [data-theme="light"] .bg-brand-400 .text-white,
+    [data-theme="light"] .bg-brand-600 .text-white,
+    [data-theme="light"] .bg-gradient-to-r .text-white,
+    [data-theme="light"] #student-avatar-big {
+        color: #0f172a !important;
+        background: transparent !important;
+        text-shadow: 0 1px 2px rgba(255,255,255,0.5);
+    }
   </style>
 </head>
 
-<body>
+<body class="bg-brand-900 text-gray-100 min-h-screen overflow-x-hidden selection:bg-brand-400 selection:text-white font-sans relative">
 
-  <!-- Decoración de fondo -->
-  <div class="bg-blob bg-blob-1"></div>
-  <div class="bg-blob bg-blob-2"></div>
-  <div class="bg-blob bg-blob-3"></div>
+  <!-- Background Animated Blobs -->
+  <div class="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+    <div class="absolute top-0 -left-4 w-72 h-72 bg-brand-400 rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-blob"></div>
+    <div class="absolute top-0 -right-4 w-72 h-72 bg-accent-pink rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-blob animation-delay-2000"></div>
+    <div class="absolute -bottom-8 left-20 w-72 h-72 bg-accent-blue rounded-full mix-blend-screen filter blur-[100px] opacity-20 animate-blob animation-delay-4000"></div>
+    <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 contrast-150"></div>
+  </div>
 
   <!-- Toast container -->
-  <div class="toast-container" id="toast-container"></div>
+  <div class="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2" id="toast-container"></div>
 
-  <div id="app">
+  <div id="app" class="relative z-10 w-full h-full flex flex-col items-center">
 
     <!-- ======================== VISTA: AUTENTICACIÓN ======================== -->
-    <div class="view" id="view-auth">
-      <div class="auth-container">
-        <div class="auth-logo">
-          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-hero"></i></div>
-          <h1>Exam<span>App</span></h1>
-          <p>Plataforma de Exámenes Educativos</p>
+    <div class="view active w-full px-4" id="view-auth" style="background: #0d111a; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 2rem; padding-bottom: 2rem;">
+    <div class="w-full max-w-md mx-auto">
+      
+      <!-- Hero Header -->
+      <div class="text-center mb-8" data-aos="fade-down" data-aos-duration="1000">
+        <div class="w-16 h-16 rounded-2xl mx-auto mb-4 bg-gradient-to-tr from-brand-400 to-[#ff007f] flex items-center justify-center shadow-[0_0_30px_rgba(155,135,245,0.4)] animate-float">
+          <i data-lucide="graduation-cap" class="w-10 h-10 text-white"></i>
+        </div>
+        <h1 class="font-outfit text-4xl font-extrabold tracking-tight mb-2">
+          Exam<span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 via-accent-pink to-accent-blue">App</span>
+        </h1>
+        <p class="text-gray-400 font-light">Plataforma Educativa de Exámenes</p>
+      </div>
+
+      <!-- Auth Container -->
+      <div class="glass-card rounded-3xl border border-white/10 p-1 backdrop-blur-xl" data-aos="zoom-in" data-aos-delay="200">
+        
+        <!-- Tabs -->
+        <div class="flex p-1 mb-4 bg-black/20 rounded-2xl w-full">
+          <button class="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all text-center auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Iniciar Sesión</button>
+          <button class="flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all text-center auth-tab" id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
         </div>
 
-        <div class="auth-tabs">
-          <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Iniciar Sesión</button>
-          <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
-        </div>
+        <div class="p-5 pt-2">
+          <!-- LOGIN -->
+          <div id="form-login" class="flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Correo electrónico</label>
+              <input type="email" id="login-email" placeholder="correo@ejemplo.com" autocomplete="email" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Contraseña</label>
+              <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all" />
+            </div>
+            <div id="login-error" class="hidden text-red-500 text-sm font-medium bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 text-center"></div>
+            
+            <button onclick="handleLogin()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all hover:-translate-y-0.5 mt-2 flex items-center justify-center gap-2">
+              Entrar <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+            <p class="text-xs text-center text-gray-500 mt-2">¿No tienes cuenta? Regístrate en la pestaña superior.</p>
+          </div>
 
-        <!-- LOGIN -->
-        <div id="form-login" class="card auth-form">
-          <div class="form-group">
-            <label class="form-label">Correo electrónico</label>
-            <input class="form-input" type="email" id="login-email" placeholder="correo@ejemplo.com"
-              autocomplete="email" />
+          <!-- REGISTER -->
+          <div id="form-register" class="hidden flex flex-col gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Nombre completo</label>
+              <input type="text" id="reg-name" placeholder="Tu nombre completo" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Correo electrónico</label>
+              <input type="email" id="reg-email" placeholder="correo@ejemplo.com" autocomplete="email" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Contraseña</label>
+              <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition-all" />
+            </div>
+            <div id="reg-error" class="hidden text-red-500 text-sm font-medium bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20 text-center"></div>
+            
+            <button onclick="handleRegister()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-400 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold shadow-lg shadow-emerald-400/20 transition-all hover:-translate-y-0.5 mt-2 flex items-center justify-center gap-2">
+              Crear cuenta <i data-lucide="user-plus" class="w-4 h-4"></i>
+            </button>
+            <p class="text-xs text-center text-gray-500 mt-2">Al registrarte, el administrador te asignará sección.</p>
           </div>
-          <div class="form-group">
-            <label class="form-label">Contraseña</label>
-            <input class="form-input" type="password" id="login-password" placeholder="••••••••"
-              autocomplete="current-password" />
-          </div>
-          <div id="login-error" class="auth-error hidden"></div>
-          <button class="btn btn-primary btn-lg w-full" onclick="handleLogin()">Entrar →</button>
-          <p class="auth-notice">¿No tienes cuenta? Regístrate arriba.</p>
-        </div>
-
-        <!-- REGISTER -->
-        <div id="form-register" class="card auth-form hidden">
-          <div class="form-group">
-            <label class="form-label">Nombre completo</label>
-            <input class="form-input" type="text" id="reg-name" placeholder="Tu nombre completo" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Correo electrónico</label>
-            <input class="form-input" type="email" id="reg-email" placeholder="correo@ejemplo.com"
-              autocomplete="email" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Contraseña</label>
-            <input class="form-input" type="password" id="reg-password" placeholder="Mínimo 6 caracteres"
-              autocomplete="new-password" />
-          </div>
-          <div id="reg-error" class="auth-error hidden"></div>
-          <button class="btn btn-secondary btn-lg w-full" onclick="handleRegister()">Crear cuenta</button>
-          <p class="auth-notice">Al registrarte, el administrador te asignará sección y permisos.</p>
         </div>
       </div>
     </div>
-
+    </div>
     <!-- ======================== VISTA: ALUMNO ======================== -->
-    <div class="view" id="view-student">
+    <div class="view hidden w-full" id="view-student">
       <!-- Navbar -->
-      <nav class="navbar">
-        <a class="navbar-logo" onclick="goHome()" href="#">
-          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-md"></i></div>
-          <span class="logo-text">Exam<span>App</span></span>
-        </a>
-        <div class="navbar-info">
-          <div class="user-badge">
-            <div class="user-avatar" id="student-avatar-sm"></div>
-            <span id="student-name-sm">Alumno</span>
+      <nav class="fixed top-0 w-full z-40 glass-header border-b border-white/10 transition-all duration-300" id="navbar-student">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex items-center justify-between h-20">
+            <a href="#" onclick="goHome()" class="flex items-center gap-3" data-aos="fade-right">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-400 to-accent-blue flex items-center justify-center shadow-lg shadow-brand-400/30">
+                <i data-lucide="graduation-cap" class="text-white w-6 h-6"></i>
+              </div>
+              <span class="font-outfit font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">
+                Exam<span class="text-brand-400">App</span>
+              </span>
+            </a>
+            
+            <div class="flex items-center gap-4" data-aos="fade-left">
+              <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 glass-panel">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold shadow-inner" id="student-avatar-sm"></div>
+                <span class="text-sm font-medium mr-1 hidden sm:block" id="student-name-sm">Alumno</span>
+              </div>
+              <button class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95 group theme-toggle-btn" onclick="toggleTheme()" id="theme-btn-student">
+                <i data-lucide="sun" class="w-5 h-5 text-gray-300 group-hover:text-white transition-colors theme-toggle-icon"></i>
+              </button>
+              <button class="p-2 rounded-xl bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/50 transition-all active:scale-95 group" onclick="logout()">
+                <i data-lucide="log-out" class="w-5 h-5 text-gray-300 group-hover:text-red-400 transition-colors"></i>
+              </button>
+            </div>
           </div>
-          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"
-            id="theme-btn-student"><i data-lucide="sun" class="icon-sm"></i></button>
-          <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
         </div>
       </nav>
 
-      <!-- Botón flotante de mensajes -->
-      <button class="fab-msg" id="fab-msg-btn" onclick="openComposeModal()" title="Mensaje / Sugerencia">
-        <i data-lucide="message-circle" class="icon-md"></i>
-        <span class="fab-pulse"></span>
+      <!-- Botones flotantes (Mensaje y Live Quiz) -->
+      <button class="fixed bottom-24 right-6 z-40 group flex items-center justify-center w-14 h-14 rounded-full bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 shadow-lg transition-all duration-300 hover:scale-110" id="fab-msg-btn" onclick="openComposeModal()" title="Mensaje / Sugerencia">
+        <i data-lucide="message-circle" class="w-6 h-6 text-white"></i>
+        <span class="absolute top-0 right-0 flex h-3 w-3">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-brand-500"></span>
+        </span>
       </button>
 
-      <!-- Botón flotante de quiz en vivo -->
-      <button class="fab-live" id="fab-live-btn" onclick="showStudentLiveSection()" title="Quiz en Vivo">
-        <i data-lucide="zap" class="icon-sm"></i> En vivo
+      <button class="fixed bottom-8 right-6 z-50 group flex items-center gap-0 overflow-hidden rounded-full bg-gradient-to-r from-[#ff007f] to-brand-400 p-1 shadow-[0_0_30px_rgba(255,0,127,0.4)] hover:shadow-[0_0_40px_rgba(255,0,127,0.6)] hover:scale-105 transition-all duration-300" id="fab-live-btn" onclick="showStudentLiveSection()" title="Quiz en Vivo" data-aos="zoom-in" data-aos-delay="500">
+        <div class="bg-black/20 backdrop-blur-md rounded-full px-5 py-3 flex items-center gap-2">
+          <i data-lucide="zap" class="w-6 h-6 text-white fill-white/50 animate-pulse"></i>
+          <span class="font-outfit font-bold text-white tracking-wide">¡Quiz en Vivo!</span>
+        </div>
       </button>
 
-      <div class="student-body">
+      <!-- Main Body -->
+      <div class="relative z-10 pt-32 pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <!-- Perfil -->
-        <div class="profile-hero">
-          <div class="profile-avatar-big" id="student-avatar-big"></div>
-          <div class="profile-info">
-            <h2 id="student-display-name">Nombre del Alumno</h2>
-            <p id="student-display-email">correo@ejemplo.com</p>
-            <div class="profile-tags">
-              <span class="tag tag-section" id="student-display-section">Sin sección</span>
+        <div class="flex flex-col md:flex-row items-center md:items-start gap-8 mb-16" data-aos="fade-up">
+          <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-r from-brand-400 to-accent-pink rounded-[2rem] blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
+            <div class="relative w-32 h-32 md:w-40 md:h-40 rounded-[2rem] bg-gradient-to-tr from-purple-600 to-brand-400 p-1">
+              <div class="w-full h-full bg-brand-900 rounded-[1.8rem] flex items-center justify-center overflow-hidden text-5xl md:text-6xl font-outfit font-bold text-transparent bg-clip-text bg-gradient-to-br from-white to-white/40" id="student-avatar-big"></div>
             </div>
-            <div class="profile-actions">
-              <button class="btn btn-ghost btn-sm" onclick="openHistoryModal()"><i data-lucide="bar-chart-2" class="icon-sm"></i> Mi Historial</button>
-              <button class="btn btn-ghost btn-sm" onclick="openLeaderboardModal()"><i data-lucide="trophy" class="icon-sm"></i> Ranking</button>
-              <button class="btn btn-ghost btn-sm" onclick="openChangePasswordModal()"><i data-lucide="key" class="icon-sm"></i> Cambiar contraseña</button>
+          </div>
+          
+          <div class="text-center md:text-left pt-2 flex-1">
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-400/10 border border-brand-400/20 text-brand-400 text-xs font-semibold uppercase tracking-wider mb-3">
+              <i data-lucide="map-pin" class="w-3 h-3"></i> <span id="student-display-section">Sin sección</span>
             </div>
+            <h1 class="font-outfit text-4xl md:text-5xl font-extrabold tracking-tight mb-2" id="student-display-name">Nombre del Alumno</h1>
+            <p class="text-gray-400 mb-6 font-light" id="student-display-email">correo@ejemplo.com</p>
+            
+            <div class="flex flex-wrap justify-center md:justify-start gap-3">
+              <button class="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium transition-all flex items-center gap-2" onclick="openHistoryModal()">
+                <i data-lucide="bar-chart-2" class="w-4 h-4 text-brand-400"></i> Mi Historial
+              </button>
+              <button class="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-medium transition-all flex items-center gap-2" onclick="openLeaderboardModal()">
+                <i data-lucide="trophy" class="w-4 h-4 text-yellow-400"></i> Ranking
+              </button>
+              <button class="px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95 group" onclick="openChangePasswordModal()" title="Cambiar contraseña">
+                <i data-lucide="key" class="w-5 h-5 text-gray-400 group-hover:text-white transition-colors"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Student Global Score Gamified -->
+          <div class="glass-card rounded-3xl p-6 border border-white/10 min-w-[220px] text-center" data-aos="fade-left" data-aos-delay="200">
+            <p class="text-gray-400 text-sm font-medium mb-1">Puntaje Global</p>
+            <div id="student-global-score" class="text-5xl font-outfit font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-2">0</div>
+            <div class="w-full bg-white/5 rounded-full h-2 mb-2 overflow-hidden">
+              <div id="student-global-progress" class="bg-gradient-to-r from-yellow-500 to-orange-400 h-2 rounded-full transition-all duration-1000" style="width: 0%"></div>
+            </div>
+            <p id="student-global-level-text" class="text-xs text-gray-500">Nivel Bronce</p>
           </div>
         </div>
 
         <!-- Anuncios -->
-        <div id="announcements-section"></div>
+        <div id="announcements-section" class="mb-12"></div>
 
         <!-- Material de estudio -->
-        <div id="material-section" style="display:none;">
-          <h2 class="section-title" style="margin-top:0;">Material de Estudio 📚</h2>
-          <div id="material-grid" class="material-grid"></div>
+        <div id="material-section" style="display:none;" class="mb-12">
+          <h2 class="text-2xl font-outfit font-bold flex items-center gap-2 mb-6">
+            <i data-lucide="library" class="text-brand-400"></i> Material de Estudio
+          </h2>
+          <div id="material-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
         </div>
 
-        <!-- Exámenes -->
-        <h2 class="section-title">Mis Exámenes</h2>
-        <div class="exams-grid" id="exams-grid">
+        <div class="mb-6 flex items-center justify-between" data-aos="fade-in" data-aos-delay="300">
+          <h2 class="text-2xl font-outfit font-bold flex items-center gap-2">
+            <i data-lucide="book-open" class="text-brand-400"></i> Exámenes Disponibles
+          </h2>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="exams-grid">
           <!-- generado dinámicamente -->
         </div>
       </div>
     </div>
 
     <!-- ======================== MODAL: QUIZ EN VIVO (alumno) ======================== -->
-    <div class="slq-modal-overlay hidden" id="slq-modal-overlay" onclick="if(event.target===this&&document.getElementById('slq-join')&&!document.getElementById('slq-join').classList.contains('hidden'))slqCloseModal()">
-      <div class="slq-modal-drawer">
-        <!-- Header del modal -->
-        <div class="slq-modal-header">
-          <span style="font-size:1.2rem;font-weight:800;"><i data-lucide="zap" class="icon-sm"></i> Quiz en Vivo</span>
-          <button class="modal-close" onclick="slqCloseModal()"><i data-lucide="x" class="icon-sm"></i></button>
+    <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300 p-4" id="slq-modal-overlay" onclick="if(event.target===this&&document.getElementById('slq-join')&&!document.getElementById('slq-join').classList.contains('hidden'))slqCloseModal()">
+      <div class="w-full max-w-lg glass-card border border-white/20 rounded-3xl overflow-hidden transform scale-95 transition-transform duration-300" id="slq-modal-drawer">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
+          <span class="font-outfit font-bold text-lg flex items-center gap-2"><i data-lucide="zap" class="text-brand-400 w-5 h-5"></i> Quiz en Vivo</span>
+          <button class="p-2 rounded-xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white" onclick="slqCloseModal()"><i data-lucide="x" class="w-5 h-5"></i></button>
         </div>
-        <!-- Contenido principal del modal -->
-        <div class="slq-modal-body">
+        
+        <!-- Body -->
+        <div class="p-6 relative">
 
-          <!-- Pantalla: Ingresar código -->
-          <div id="slq-join" style="display:flex;flex-direction:column;align-items:center;padding:2rem 0.5rem;">
-            <div style="margin-bottom:0.8rem;"><i data-lucide="zap" class="icon-xl" style="color:var(--secondary);"></i></div>
-            <h2 style="margin-bottom:0.4rem;font-size:1.4rem;">Unirse al quiz</h2>
-            <p style="color:var(--text-muted);margin-bottom:1.5rem;text-align:center;">Ingresa el código que te dio tu profesor</p>
-            <div style="display:flex;gap:0.8rem;">
-              <input class="form-input" id="slq-code-input"
-                placeholder="ABC123" maxlength="6"
-                style="text-transform:uppercase;letter-spacing:0.25rem;font-size:1.5rem;font-weight:800;text-align:center;width:170px;"
-                onkeydown="if(event.key==='Enter')slqJoin()" autofocus />
-              <button class="btn btn-primary" onclick="slqJoin()">Unirse →</button>
+          <!-- Ingresar código -->
+          <div id="slq-join" class="flex flex-col items-center py-8">
+            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-brand-400 to-[#ff007f] flex items-center justify-center shadow-[0_0_30px_rgba(155,135,245,0.4)] mb-6">
+              <i data-lucide="zap" class="w-10 h-10 text-white fill-white/20"></i>
+            </div>
+            <h2 class="text-2xl font-outfit font-bold mb-2">Unirse al quiz</h2>
+            <p class="text-gray-400 mb-8 text-center">Ingresa el código que te dio tu profesor</p>
+            <div class="flex flex-col sm:flex-row gap-4 w-full justify-center">
+              <input type="text" id="slq-code-input" placeholder="ABC123" maxlength="6" class="w-48 bg-black/40 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-400 transition-all uppercase tracking-[0.25em] text-xl font-bold text-center mx-auto sm:mx-0" onkeydown="if(event.key==='Enter')slqJoin()" autofocus />
+              <button class="px-6 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all hover:-translate-y-0.5" onclick="slqJoin()">Entrar →</button>
             </div>
           </div>
 
-          <!-- Pantalla: Sala de espera -->
-          <div id="slq-waiting" class="hidden" style="text-align:center;padding:3rem 1rem;">
-            <div style="margin-bottom:1rem;" class="lq-pulse"><i data-lucide="hourglass" class="icon-xl" style="color:var(--secondary);"></i></div>
-            <h2 style="font-size:1.4rem;">Esperando al profesor...</h2>
-            <p style="color:var(--text-muted);margin-top:0.5rem;">El quiz empezará en cualquier momento</p>
-            <p style="margin-top:1.5rem;">Sala: <strong id="slq-room-display" style="color:var(--primary-light);letter-spacing:0.25rem;font-size:1.2rem;"></strong></p>
-            <button class="btn btn-ghost btn-sm" style="margin-top:2rem;" onclick="slqExit()">Cancelar</button>
-          </div>
-
-          <!-- Pantalla: Cuenta regresiva 3-2-1 -->
-          <div id="slq-countdown" class="hidden" style="text-align:center;padding:3rem 1rem;">
-            <p style="color:var(--text-muted);font-size:0.95rem;margin-bottom:1rem;">¡Prepárate!</p>
-            <div id="slq-countdown-num" style="font-size:8rem;font-weight:900;color:var(--secondary);line-height:1;transition:all 0.2s;">3</div>
-            <p id="slq-countdown-q" style="color:var(--text-muted);margin-top:1.2rem;font-size:0.88rem;"></p>
-          </div>
-
-          <!-- Pantalla: Pregunta activa -->
-          <div id="slq-question" class="hidden" style="padding:0.5rem 0;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
-              <span id="slq-q-num" style="color:var(--text-muted);font-size:0.88rem;">Pregunta 1</span>
-              <span id="slq-timer" style="font-size:2.2rem;font-weight:900;color:var(--secondary);">20</span>
+          <!-- Sala de espera -->
+          <div id="slq-waiting" class="hidden flex-col items-center py-10">
+            <div class="animate-bounce mb-6">
+              <i data-lucide="hourglass" class="w-16 h-16 text-emerald-400"></i>
             </div>
-            <div id="slq-q-text" class="latex-container"
-              style="background:rgba(255,255,255,0.06);border-radius:12px;padding:1.2rem;font-size:1.05rem;font-weight:600;margin-bottom:1rem;line-height:1.6;"></div>
-            <div id="slq-options" class="lq-student-opts"></div>
+            <h2 class="text-2xl font-outfit font-bold mb-2">Esperando al profesor...</h2>
+            <p class="text-gray-400 mb-6">El quiz empezará en cualquier momento</p>
+            <div class="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 mb-8">
+              <span class="text-gray-400 mr-2">Sala:</span>
+              <strong id="slq-room-display" class="text-brand-400 tracking-[0.2em] text-xl"></strong>
+            </div>
+            <button class="px-6 py-2 rounded-xl border border-white/10 hover:bg-white/5 text-gray-300 transition-colors" onclick="slqExit()">Cancelar</button>
           </div>
 
-          <!-- Pantalla: Respuesta enviada + Respuesta correcta -->
-          <div id="slq-answered" class="hidden" style="text-align:center;padding:2rem 1rem;">
-            <div id="slq-result-icon" style="font-size:4rem;margin-bottom:0.8rem;">⏳</div>
-            <h2 id="slq-result-text" style="font-size:1.4rem;">Respuesta enviada</h2>
-            <p style="color:var(--text-muted);margin-top:0.3rem;font-size:0.9rem;">Esperando resultado del profesor...</p>
-            <div id="slq-points-gained" style="font-size:1.6rem;font-weight:800;color:var(--secondary);margin-top:0.8rem;"></div>
-            <!-- Respuesta correcta (aparece cuando el host muestra el marcador) -->
-            <div id="slq-correct-reveal" class="hidden" style="margin-top:1.2rem;padding:0.9rem 1.2rem;border-radius:12px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);">
-              <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.3rem;">✅ Respuesta correcta:</p>
-              <p id="slq-correct-text" style="font-weight:700;font-size:1rem;"></p>
+          <!-- Cuenta regresiva 3-2-1 -->
+          <div id="slq-countdown" class="hidden flex-col items-center justify-center py-16">
+            <p class="text-gray-400 font-medium mb-4 uppercase tracking-widest text-sm">¡Prepárate!</p>
+            <div id="slq-countdown-num" class="text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-brand-400 to-[#ff007f] leading-none mb-6">3</div>
+            <p id="slq-countdown-q" class="text-gray-400 font-medium"></p>
+          </div>
+
+          <!-- Pregunta activa -->
+          <div id="slq-question" class="hidden flex-col">
+            <div class="flex justify-between items-center mb-4">
+              <span id="slq-q-num" class="text-gray-400 font-medium text-sm bg-white/5 px-3 py-1 rounded-lg">Pregunta 1</span>
+              <div class="flex items-center justify-center w-14 h-14 rounded-full bg-brand-900 border-4 border-brand-400 shadow-[0_0_15px_rgba(155,135,245,0.4)]">
+                <span id="slq-timer" class="text-xl font-black text-brand-400">20</span>
+              </div>
+            </div>
+            <div id="slq-q-text" class="latex-container w-full bg-white/5 border border-white/10 rounded-2xl p-10 text-xl font-semibold mb-6 shadow-inner text-center min-h-[120px]"></div>
+            <div id="slq-options" class="flex flex-col gap-3"></div>
+          </div>
+
+          <!-- Respuesta enviada -->
+          <div id="slq-answered" class="hidden flex-col items-center py-8">
+            <div id="slq-result-icon" class="mb-4">
+              <!-- JS Injects Icons here -->
+            </div>
+            <h2 id="slq-result-text" class="text-3xl font-outfit font-bold mb-2">Respuesta enviada</h2>
+            <p class="text-gray-400 mb-6">Esperando resultado del profesor...</p>
+            <div id="slq-points-gained" class="text-2xl font-black text-emerald-400"></div>
+            
+            <!-- Correct Reveal -->
+            <div id="slq-correct-reveal" class="hidden w-full mt-8 p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+              <p class="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1">
+                <i data-lucide="check-circle" class="w-4 h-4"></i> Respuesta Correcta:
+              </p>
+              <p id="slq-correct-text" class="text-lg font-bold text-white"></p>
             </div>
           </div>
 
-          <!-- Pantalla: Marcador entre preguntas -->
-          <div id="slq-scoreboard" class="hidden" style="padding:0.5rem 0;">
-            <h3 style="text-align:center;margin-bottom:1rem;"><i data-lucide="trophy" class="icon-md"></i> Marcador</h3>
-            <div id="slq-score-rows"></div>
-            <p style="text-align:center;color:var(--text-muted);margin-top:1rem;font-size:0.85rem;">Esperando la siguiente pregunta...</p>
+          <!-- Marcador -->
+          <div id="slq-scoreboard" class="hidden flex-col py-4">
+            <h3 class="text-2xl font-outfit font-bold text-center mb-6 flex items-center justify-center gap-2">
+              <i data-lucide="trophy" class="text-yellow-400 w-6 h-6"></i> Marcador Top 5
+            </h3>
+            <div id="slq-score-rows" class="flex flex-col gap-3"></div>
+            <p class="text-center text-gray-500 mt-6 animate-pulse">Esperando la siguiente pregunta...</p>
           </div>
 
-          <!-- Pantalla: Final -->
-          <div id="slq-final" class="hidden" style="text-align:center;padding:2rem 0;">
-            <div style="margin-bottom:0.5rem;"><i data-lucide="party-popper" class="icon-xl" style="color:var(--secondary);"></i></div>
-            <h2 style="margin-bottom:1.5rem;font-size:1.4rem;">¡Quiz terminado!</h2>
-            <div id="slq-final-podium" class="lq-podium"></div>
-            <button class="btn btn-primary" style="margin-top:2rem;" onclick="slqExit()"><i data-lucide="home" class="icon-sm"></i> Cerrar</button>
+          <!-- Final -->
+          <div id="slq-final" class="hidden flex-col items-center py-8">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 flex items-center justify-center shadow-[0_0_40px_rgba(234,179,8,0.5)] mb-6">
+              <i data-lucide="party-popper" class="w-10 h-10 text-gray-900"></i>
+            </div>
+            <h2 class="text-3xl font-outfit font-bold mb-8">¡Quiz Terminado!</h2>
+            <div id="slq-final-podium" class="w-full flex justify-center items-end gap-2 sm:gap-4 h-48 mb-10"></div>
+            <button class="px-8 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold transition-all" onclick="slqExit()">Volver al inicio</button>
           </div>
 
-        </div><!-- /.slq-modal-body -->
-      </div><!-- /.slq-modal-drawer -->
-    </div><!-- #slq-modal-overlay -->
+        </div>
+      </div>
+    </div>
 
     <!-- ======================== VISTA: EXAMEN ======================== -->
-    <div class="view" id="view-exam">
-      <nav class="navbar">
-        <a class="navbar-logo" onclick="goHome()" href="#">
-          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-md"></i></div>
-          <span class="logo-text">Exam<span>App</span></span>
-        </a>
-        <div class="navbar-info">
-          <span id="exam-nav-title" style="font-weight:700;font-size:0.95rem;"></span>
-          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"><i data-lucide="sun" class="icon-sm"></i></button>
+    <div class="view hidden w-full" id="view-exam">
+      <!-- Exam Navbar (Minimalist) -->
+      <nav class="fixed top-0 w-full z-40 glass-header border-b border-white/10">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6">
+          <div class="flex items-center justify-between h-16">
+            <a href="#" onclick="goHome()" class="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
+              <i data-lucide="arrow-left" class="w-5 h-5"></i>
+              <span class="font-medium text-sm hidden sm:inline">Salir del examen</span>
+            </a>
+            <div class="flex-1 text-center">
+              <span id="exam-nav-title" class="font-outfit font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-accent-blue"></span>
+            </div>
+            <button class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-gray-400 hover:text-white" onclick="toggleTheme()">
+              <i data-lucide="sun" class="w-5 h-5 theme-toggle-icon"></i>
+            </button>
+          </div>
         </div>
       </nav>
 
-      <div class="exam-body">
+      <div class="relative z-10 pt-24 pb-20 px-4 sm:px-6 max-w-4xl mx-auto w-full">
         <!-- Contenedor de pregunta -->
-        <div id="exam-question-view">
-          <div class="exam-progress-bar-outer">
-            <div class="exam-progress-bar-inner" id="exam-progress-bar"></div>
+        <div id="exam-question-view" class="w-full">
+          
+          <!-- Progress Bar Header -->
+          <div class="mb-8" data-aos="fade-down">
+            <!-- Stats Row -->
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3 text-sm font-medium">
+              <div class="flex items-center gap-4">
+                <span class="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300" id="exam-counter"></span>
+                <span class="px-3 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hidden flex items-center gap-1.5 font-bold" id="exam-timer">
+                  <i data-lucide="clock" class="w-4 h-4"></i> --:--
+                </span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="px-3 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 hidden" id="exam-flagged-count">🔖 0 pendientes</span>
+                <span class="px-3 py-1 rounded-lg bg-brand-400/10 border border-brand-400/20 text-brand-300 tracking-wider" id="exam-score-live">✅ 0 / ❌ 0</span>
+              </div>
+            </div>
+            
+            <!-- Progress Line -->
+            <div class="w-full h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+              <div class="h-full bg-gradient-to-r from-brand-500 to-accent-pink rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(155,135,245,0.5)]" id="exam-progress-bar" style="width:0%"></div>
+            </div>
           </div>
-          <div class="exam-header-info">
-            <span class="exam-counter" id="exam-counter"></span>
-            <span class="exam-timer-badge hidden" id="exam-timer">⏱️ --:--</span>
-            <span class="exam-flagged-badge hidden" id="exam-flagged-count">🔖 0 pendientes</span>
-            <span class="exam-counter" id="exam-score-live">✅ 0 / ❌ 0</span>
+
+          <!-- Question Card -->
+          <div class="glass-card rounded-3xl border border-white/10 p-6 md:p-8 mb-8" data-aos="zoom-in">
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-brand-400 font-bold mb-6 text-sm" id="question-num-label"></div>
+            
+            <!-- Question Text (LaTeX compatible) -->
+            <div class="latex-container text-xl md:text-2xl font-semibold mb-8 leading-relaxed text-gray-100 min-h-[100px]" id="question-text"></div>
+            
+            <!-- Options Grid -->
+            <div class="flex flex-col gap-3" id="options-list"></div>
+            
+            <!-- Feedback Box -->
+            <div id="feedback-box" class="hidden mt-6 p-4 rounded-xl border font-medium text-sm"></div>
           </div>
-          <div class="exam-question-card">
-            <div class="exam-question-num" id="question-num-label"></div>
-            <div class="exam-question-text" id="question-text"></div>
-            <div class="options-list" id="options-list"></div>
-            <div id="feedback-box" class="hidden"></div>
-          </div>
-          <div class="exam-actions">
-            <button class="btn btn-ghost" id="btn-skip" onclick="skipQuestion()" style="display:none;">
-              <i data-lucide="bookmark" class="icon-sm"></i> Saltar
+
+          <!-- Actions -->
+          <div class="flex items-center justify-between mt-8">
+            <button class="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-bold transition-all flex items-center gap-2" id="btn-skip" onclick="skipQuestion()" style="display:none;">
+              <i data-lucide="bookmark-plus" class="w-5 h-5"></i> Saltar
             </button>
-            <button class="btn btn-primary" id="btn-next" onclick="nextQuestion()">Siguiente →</button>
+            <!-- Spacer to push next button to right if skip is hidden -->
+            <div class="flex-1"></div>
+            <button class="px-8 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all hover:-translate-y-0.5 flex items-center gap-2" id="btn-next" onclick="nextQuestion()">
+              Siguiente <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </button>
           </div>
         </div>
 
         <!-- Resultados -->
-        <div id="exam-results-view" class="hidden">
-          <div class="results-card" id="results-card">
-            <div class="results-emoji" id="results-emoji"></div>
-            <div class="circular-progress" id="circular-progress-container">
-              <svg viewBox="0 0 160 160" width="160" height="160">
-                <circle class="circular-bg" cx="80" cy="80" r="68" />
-                <circle class="circular-fill" id="circular-fill" cx="80" cy="80" r="68" stroke-dasharray="427.26"
-                  stroke-dashoffset="427.26" />
+        <div id="exam-results-view" class="hidden w-full max-w-3xl mx-auto text-center py-10" data-aos="fade-up">
+          
+          <div class="glass-card border border-white/10 rounded-[3rem] p-8 md:p-12 mb-8 relative overflow-hidden" id="results-card">
+            <!-- Background glow -->
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-brand-400/20 rounded-full blur-[80px] pointer-events-none"></div>
+            
+            <div class="text-7xl mb-6 relative z-10 animate-bounce" id="results-emoji"></div>
+            
+            <!-- Circular Progress -->
+            <div class="relative w-48 h-48 mx-auto mb-8 z-10 flex items-center justify-center">
+              <svg viewBox="0 0 160 160" class="w-full h-full transform -rotate-90 drop-shadow-[0_0_15px_rgba(155,135,245,0.4)]">
+                <circle cx="80" cy="80" r="68" class="stroke-white/10 fill-none" stroke-width="12" />
+                <circle id="circular-fill" cx="80" cy="80" r="68" class="stroke-brand-400 fill-none transition-all duration-1000 ease-out" stroke-width="12" stroke-linecap="round" stroke-dasharray="427.26" stroke-dashoffset="427.26" />
               </svg>
-              <div class="circular-text">
-                <div class="circular-pct" id="result-pct">0%</div>
-                <div class="circular-label">PUNTAJE</div>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-white/70" id="result-pct">0%</span>
+                <span class="text-xs font-bold text-gray-400 tracking-widest mt-1">PUNTAJE</span>
               </div>
             </div>
-            <h2 class="results-title" id="results-title"></h2>
-            <p class="results-subtitle" id="results-subtitle"></p>
-            <div class="results-stats">
-              <div class="stat-item">
-                <div class="stat-value" id="res-correct" style="color:var(--secondary)">0</div>
-                <div class="stat-label">✅ Correctas</div>
+
+            <h2 class="font-outfit text-3xl font-bold mb-2 text-white" id="results-title"></h2>
+            <p class="text-brand-300 mb-10 text-lg" id="results-subtitle"></p>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-3 gap-4 border-t border-white/10 pt-8" id="results-stats">
+              <div class="flex flex-col items-center p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/10 transition-colors">
+                <span class="text-3xl font-black text-emerald-400 mb-1" id="res-correct">0</span>
+                <span class="text-xs font-bold text-emerald-500/70 uppercase tracking-wider flex items-center gap-1"><i data-lucide="check-circle" class="w-3 h-3"></i> Correctas</span>
               </div>
-              <div class="stat-item">
-                <div class="stat-value" id="res-wrong" style="color:var(--danger)">0</div>
-                <div class="stat-label">❌ Incorrectas</div>
+              <div class="flex flex-col items-center p-4 rounded-2xl bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 transition-colors">
+                <span class="text-3xl font-black text-red-400 mb-1" id="res-wrong">0</span>
+                <span class="text-xs font-bold text-red-500/70 uppercase tracking-wider flex items-center gap-1"><i data-lucide="x-circle" class="w-3 h-3"></i> Erróneas</span>
               </div>
-              <div class="stat-item">
-                <div class="stat-value" id="res-total" style="color:var(--primary-light)">0</div>
-                <div class="stat-label">📋 Total</div>
+              <div class="flex flex-col items-center p-4 rounded-2xl bg-brand-400/5 border border-brand-400/10 hover:bg-brand-400/10 transition-colors">
+                <span class="text-3xl font-black text-brand-400 mb-1" id="res-total">0</span>
+                <span class="text-xs font-bold text-brand-400/70 uppercase tracking-wider flex items-center gap-1"><i data-lucide="list" class="w-3 h-3"></i> Total</span>
               </div>
             </div>
           </div>
-          <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
-            <button class="btn btn-ghost" onclick="toggleReview()"><i data-lucide="search" class="icon-sm"></i> Revisar respuestas</button>
-            <button class="btn btn-outline" onclick="retakeExam()"><i data-lucide="refresh-cw" class="icon-sm"></i> Intentar de nuevo</button>
-            <button class="btn btn-primary" onclick="goHome()"><i data-lucide="home" class="icon-sm"></i> Volver al inicio</button>
+
+          <!-- Post-Exam Actions -->
+          <div class="flex flex-wrap justify-center gap-4">
+            <button class="px-6 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 font-bold transition-all flex items-center gap-2" onclick="toggleReview()">
+              <i data-lucide="search" class="w-5 h-5 text-brand-400"></i> Revisar Respuestas
+            </button>
+            <button class="px-6 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 text-emerald-400 font-bold transition-all flex items-center gap-2" onclick="retakeExam()">
+              <i data-lucide="refresh-cw" class="w-5 h-5"></i> Intentar de nuevo
+            </button>
+            <button class="px-8 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="goHome()">
+              <i data-lucide="home" class="w-5 h-5"></i> Inicio
+            </button>
           </div>
+          
           <!-- Revisión de preguntas -->
-          <div id="review-section" class="hidden" style="margin-top:1.5rem;"></div>
+          <div id="review-section" class="hidden mt-10 text-left w-full space-y-6"></div>
         </div>
       </div>
     </div>
 
     <!-- ======================== VISTA: ADMINISTRADOR ======================== -->
-    <div class="view" id="view-admin">
-      <nav class="navbar">
-        <a class="navbar-logo" onclick="goHome()" href="#">
-          <div class="logo-icon"><i data-lucide="graduation-cap" class="icon-md"></i></div>
-          <span class="logo-text">Exam<span>App</span></span>
-        </a>
-        <div class="navbar-info">
-          <div class="user-badge">
-            <div class="user-avatar" id="admin-avatar"><i data-lucide="crown" class="icon-sm"></i></div>
-            <div style="display:flex;flex-direction:column;line-height:1.2;">
-              <span id="admin-role-label" style="font-size:0.72rem;color:var(--text-muted);">Administrador</span>
-              <span id="admin-name-label" style="font-size:0.88rem;font-weight:700;"></span>
+    <div class="view hidden w-full h-full flex flex-col md:flex-row bg-transparent" id="view-admin">
+      
+      <!-- Top Navbar (Desktop & Mobile) -->
+      <nav class="absolute top-0 w-full z-50 glass-header border-b border-white/10 transition-all duration-300" id="admin-navbar">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex items-center justify-between h-20">
+            <!-- Logo -->
+            <a href="#" onclick="showPanel('overview')" class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-400 to-accent-pink flex items-center justify-center shadow-lg shadow-brand-400/30">
+                <i data-lucide="graduation-cap" class="text-white w-5 h-5"></i>
+              </div>
+              <span class="font-outfit font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70 hidden sm:block">
+                Exam<span class="text-brand-400">App</span>
+              </span>
+            </a>
+            
+            <div class="flex items-center gap-2 sm:gap-4">
+              
+              <!-- Dropdown: Gestión -->
+              <div class="relative group">
+                <button class="p-2 sm:px-4 sm:py-2 flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all active:scale-95" onclick="toggleDropdown('drop-gest')">
+                  <i data-lucide="grid" class="w-5 h-5 text-gray-300"></i>
+                  <span class="hidden sm:inline font-semibold text-sm">Gestión</span>
+                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 hidden sm:inline transition-transform" id="icon-drop-gest"></i>
+                </button>
+                <div id="drop-gest" class="hidden absolute right-0 mt-3 w-48 bg-gray-900 border border-white/10 rounded-2xl shadow-xl overflow-hidden z-50">
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm" onclick="showPanel('students'); toggleDropdown('drop-gest')"><i data-lucide="users" class="w-4 h-4 text-gray-400"></i> Alumnos</button>
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm" onclick="showPanel('exams'); toggleDropdown('drop-gest')"><i data-lucide="file-text" class="w-4 h-4 text-gray-400"></i> Exámenes</button>
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm" onclick="showPanel('material'); toggleDropdown('drop-gest')"><i data-lucide="book-open" class="w-4 h-4 text-gray-400"></i> Material</button>
+                  <div class="border-t border-white/10 my-1"></div>
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm" onclick="showPanel('announcements'); toggleDropdown('drop-gest')"><i data-lucide="megaphone" class="w-4 h-4 text-gray-400"></i> Anuncios</button>
+                </div>
+              </div>
+
+              <!-- Button: Herramientas (En Vivo) -->
+              <button class="hidden sm:flex p-2 items-center gap-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all active:scale-95" onclick="showPanel('live');initLivePanel()" title="Quiz en Vivo">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+              </button>
+
+              <!-- Dropdown: Avatar & Config -->
+              <div class="relative group">
+                <button class="flex items-center gap-2 px-2 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/5 border border-white/10 active:scale-95 transition-all hover:bg-white/10" onclick="toggleDropdown('drop-user')">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 flex items-center justify-center text-sm font-bold shadow-inner text-white" id="admin-avatar">
+                    AJ
+                  </div>
+                  <div class="hidden md:flex flex-col text-left mr-1">
+                    <span class="text-[0.8rem] font-bold leading-tight text-white mb-0" id="admin-name-label">Admin</span>
+                    <span class="text-[0.65rem] text-brand-400 font-bold leading-tight tracking-wider" id="admin-role-label">Profesor</span>
+                  </div>
+                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 hidden md:inline transition-transform" id="icon-drop-user"></i>
+                </button>
+                <div id="drop-user" class="hidden absolute right-0 mt-3 w-56 bg-gray-900 border border-white/10 rounded-2xl shadow-xl overflow-hidden z-50">
+                  <button class="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors text-sm" onclick="showPanel('messages'); loadInbox(); toggleDropdown('drop-user')">
+                    <span class="flex items-center gap-3"><i data-lucide="inbox" class="w-4 h-4 text-gray-400"></i> Mensajes</span>
+                    <span class="bg-brand-500 text-white text-[0.65rem] font-bold px-1.5 rounded-full hidden" id="msg-badge">0</span>
+                  </button>
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm" onclick="toggleTheme(); toggleDropdown('drop-user')"><i data-lucide="sun" class="w-4 h-4 text-gray-400 theme-toggle-icon"></i> Cambiar tema</button>
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors text-sm" onclick="openChangePasswordModal(); toggleDropdown('drop-user')"><i data-lucide="lock" class="w-4 h-4 text-gray-400"></i> Cambiar Contraseña</button>
+                  <div class="border-t border-white/10 my-1"></div>
+                  <button class="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-red-500/10 text-red-400 transition-colors text-sm" onclick="logout()"><i data-lucide="log-out" class="w-4 h-4"></i> Cerrar Sesión</button>
+                </div>
+              </div>
+              
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" title="Cambiar contraseña"
-            onclick="openChangePasswordModal()"><i data-lucide="key" class="icon-sm"></i></button>
-          <button class="btn btn-ghost btn-sm theme-toggle-btn" onclick="toggleTheme()"><i data-lucide="sun" class="icon-sm"></i></button>
-          <button class="btn btn-ghost btn-sm" onclick="logout()">Salir</button>
         </div>
       </nav>
 
-      <div class="admin-layout">
-        <!-- Sidebar -->
-        <aside class="admin-sidebar">
-          <div class="sidebar-section">Panel</div>
-          <nav class="sidebar-nav">
-            <button class="sidebar-item active" id="nav-overview" onclick="showPanel('overview')">
-              <span class="sidebar-icon"><i data-lucide="layout-dashboard"></i></span> Resumen
-            </button>
-            <button class="sidebar-item" id="nav-analytics" onclick="showPanel('analytics')">
-              <span class="sidebar-icon"><i data-lucide="trending-up"></i></span> Analíticas
-            </button>
-            <div class="sidebar-section">Gestión</div>
-            <button class="sidebar-item" id="nav-students" onclick="showPanel('students')">
-              <span class="sidebar-icon"><i data-lucide="users"></i></span> Alumnos
-            </button>
-            <button class="sidebar-item" id="nav-exams" onclick="showPanel('exams')">
-              <span class="sidebar-icon"><i data-lucide="file-text"></i></span> Exámenes
-            </button>
-            <button class="sidebar-item" id="nav-material" onclick="showPanel('material')">
-              <span class="sidebar-icon"><i data-lucide="book-open"></i></span> Material
-            </button>
-            <button class="sidebar-item" id="nav-announcements" onclick="showPanel('announcements')">
-              <span class="sidebar-icon"><i data-lucide="megaphone"></i></span> Anuncios
-            </button>
-            <button class="sidebar-item" id="nav-messages" onclick="showPanel('messages');loadInbox()">
-              <span class="sidebar-icon"><i data-lucide="inbox"></i></span> Mensajes
-              <span class="msg-badge hidden" id="msg-badge">0</span>
-            </button>
-            <div class="sidebar-section">Herramientas</div>
-            <button class="sidebar-item" id="nav-live" onclick="showPanel('live');initLivePanel()">
-              <span class="sidebar-icon"><i data-lucide="zap"></i></span> Quiz en Vivo
-            </button>
-          </nav>
-        </aside>
+      <!-- Main Content -->
+      <main class="w-full min-h-screen pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10 admin-main">
 
-        <!-- Main content -->
-        <main class="admin-main">
-
-          <!-- Panel: Resumen -->
-          <div class="admin-panel active" id="panel-overview">
-            <h1 class="section-title" style="margin-bottom:1.5rem;">Resumen general</h1>
-            <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
-              <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i data-lucide="download" class="icon-sm"></i> Descargar CSV</button>
+        <!-- Panel: Resumen / Centro de Comando -->
+        <div class="admin-panel active w-full fade-in" id="panel-overview">
+          
+          <!-- Hero Header -->
+          <div class="mb-12">
+            <div class="inline-block px-4 py-1.5 rounded-full bg-brand-400/10 border border-brand-400/20 text-brand-400 text-sm font-semibold mb-4 backdrop-blur-md">
+              👋 Bienvenido de vuelta
             </div>
-            <div class="stats-grid" id="admin-stats"></div>
-            <h2 class="section-title">Actividad reciente</h2>
-            <div class="card">
-              <div id="recent-activity" style="color:var(--text-muted);font-size:0.9rem;"></div>
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h1 class="font-outfit text-5xl md:text-6xl font-extrabold tracking-tight">
+                Panel de <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 via-accent-pink to-accent-blue">Control</span>
+              </h1>
+              <button class="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-brand-500/20 shadow-sm border border-white/10 text-sm font-medium transition-all flex items-center gap-2 hover:text-brand-300 self-start md:self-center" onclick="exportCSV()">
+                <i data-lucide="download" class="w-4 h-4"></i> Exportar Datos
+              </button>
             </div>
+            <p class="text-gray-400 text-lg max-w-2xl font-light mt-4">Gestiona tus alumnos, analiza los resultados en tiempo real y lanza quizzes interactivos de forma instantánea.</p>
           </div>
 
-          <!-- Panel: Analíticas -->
-          <div class="admin-panel" id="panel-analytics">
-            <h1 class="section-title" style="margin-bottom:1.5rem;"><i data-lucide="trending-up" class="icon-md"></i> Analíticas de rendimiento</h1>
-            <div class="form-group" style="max-width:300px;margin-bottom:1.5rem;">
-              <label class="form-label">Filtrar por examen</label>
-              <select class="form-input" id="analytics-exam-filter" onchange="renderAnalytics()">
-                <option value="">Todos los exámenes</option>
-              </select>
-            </div>
-            <div class="analytics-grid">
-              <div class="analytics-card">
-                <h3 class="analytics-card-title">Promedio por examen</h3>
-                <canvas id="chart-avg-exam"></canvas>
-              </div>
-              <div class="analytics-card">
-                <h3 class="analytics-card-title">Distribución de rendimiento</h3>
-                <canvas id="chart-distribution"></canvas>
-              </div>
-              <div class="analytics-card">
-                <h3 class="analytics-card-title">Intentos por día</h3>
-                <canvas id="chart-timeline"></canvas>
-              </div>
-              <div class="analytics-card">
-                <h3 class="analytics-card-title">❓ Top preguntas más difíciles</h3>
-                <div id="hardest-questions-table" style="overflow-x:auto;"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Panel: Alumnos -->
-          <div class="admin-panel" id="panel-students">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
-              <h1 class="section-title" style="margin-bottom:0;">Alumnos registrados</h1>
-            </div>
-
-            <!-- Barra de filtros -->
-            <div class="filter-bar">
-              <div class="filter-search-wrap">
-                <span class="filter-icon"><i data-lucide="search" class="icon-sm"></i></span>
-                <input class="form-input" type="text" id="filter-search" placeholder="Buscar por nombre o correo..."
-                  oninput="applyStudentFilters()" />
-              </div>
-              <select class="form-input filter-select" id="filter-section" onchange="applyStudentFilters()">
-                <option value="">Todas las secciones</option>
-              </select>
-              <select class="form-input filter-select" id="filter-role" onchange="applyStudentFilters()">
-                <option value="">Todos los roles</option>
-                <option value="student">👤 Alumnos</option>
-                <option value="admin">👨‍🏫 Profesores</option>
-              </select>
-              <button class="btn btn-ghost btn-sm" onclick="renderAdmin()" title="Refrescar">🔄</button>
-            </div>
-
-            <div class="table-wrapper">
-              <table id="students-table">
-                <thead>
-                  <tr>
-                    <th>Nombre / Correo</th>
-                    <th>Rol</th>
-                    <th>Sección</th>
-                    <th>Permisos de examen</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="students-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Panel: Exámenes -->
-          <div class="admin-panel" id="panel-exams">
-            <div
-              style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.7rem;">
-              <h1 class="section-title" style="margin-bottom:0;">Exámenes</h1>
-              <div style="display:flex;gap:0.7rem;">
-                <button class="btn btn-ghost" onclick="openLatexModal()">📥 Importar LaTeX</button>
-                <button class="btn btn-primary" onclick="openCreateExamModal()">+ Nuevo examen</button>
-              </div>
-            </div>
-            <div class="table-wrapper">
-              <table id="exams-table">
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Descripción</th>
-                    <th>Preguntas</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="exams-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Panel: Material -->
-          <div class="admin-panel" id="panel-material">
-            <div
-              style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.7rem;">
-              <h1 class="section-title" style="margin-bottom:0;">Material de Estudio</h1>
-              <button class="btn btn-primary" onclick="openAddMaterialModal()">+ Agregar material</button>
-            </div>
-            <p style="color:var(--text-muted);font-size:0.86rem;margin-bottom:1.2rem;">
-              💡 El <strong>Título</strong> debe coincidir exactamente con el título del exámen para que el alumno vea
-              el material cuando tenga permiso. No es necesario que el exámen exista primero.
-            </p>
-            <div class="table-wrapper">
-              <table id="material-table">
-                <thead>
-                  <tr>
-                    <th>Módulo (Título)</th>
-                    <th>Nombre del archivo</th>
-                    <th style="width:35%">Link de Drive</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="material-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Panel: Anuncios -->
-          <div class="admin-panel" id="panel-announcements">
-            <div
-              style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.7rem;">
-              <h1 class="section-title" style="margin-bottom:0;">Tablero de Anuncios</h1>
-              <button class="btn btn-primary" onclick="openAddAnnouncementModal()">+ Nuevo anuncio</button>
-            </div>
-            <div class="table-wrapper">
-              <table id="announcements-table">
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Contenido</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="announcements-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- ===== Panel: Mensajes ===== -->
-          <div class="admin-panel" id="panel-messages">
-            <h1 class="section-title" style="margin-bottom:1.2rem;">📬 Bandeja de entrada</h1>
-            <div id="inbox-list">
-              <p style="color:var(--text-muted);text-align:center;padding:2rem;">Cargando...</p>
-            </div>
-          </div>
-
-          <!-- ===== Panel: Quiz en Vivo ===== -->
-          <div class="admin-panel" id="panel-live">
-            <!-- Fase 1: Configurar quiz -->
-            <div id="live-setup">
-              <h1 class="section-title" style="margin-bottom:0.5rem;">⚡ Quiz en Vivo</h1>
-              <p style="color:var(--text-muted);margin-bottom:1.5rem;">Crea un quiz rápido para tus alumnos en tiempo real, al estilo Kahoot.</p>
-              <div class="card" style="max-width:700px;">
-                <div class="form-group">
-                  <label class="form-label">Título del Quiz</label>
-                  <input class="form-input" id="lq-title" placeholder="Ej: Repaso rápido de Álgebra" />
+          <!-- Live Quiz Action (Floating/Animated) -->
+          <div class="mb-12 relative group cursor-pointer" onclick="showPanel('live');initLivePanel()">
+            <div class="absolute -inset-1 bg-gradient-to-r from-brand-400 via-[#ff007f] to-brand-400 rounded-3xl blur opacity-20 group-hover:opacity-60 transition duration-1000 group-hover:duration-200 animate-pulse-glow"></div>
+            <div class="relative flex items-center justify-between p-8 rounded-3xl bg-black/40 backdrop-blur-xl border border-white/10 overflow-hidden isolate">
+              <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none"></div>
+              <div class="flex items-center gap-6 z-10">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-[#ff007f] flex items-center justify-center shadow-[0_0_30px_rgba(155,135,245,0.4)] animate-float">
+                  <i data-lucide="zap" class="w-8 h-8 text-white fill-white/20"></i>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">⏱️ Tiempo por pregunta (segundos)</label>
-                  <input class="form-input" id="lq-time" type="number" value="20" min="5" max="120" style="width:100px;" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Preguntas <span style="color:var(--text-muted);font-size:0.8rem;">(LaTeX o texto normal)</span></label>
-                  <textarea class="form-input" id="lq-latex-q" rows="6"
-                    placeholder="\question Texto de la pregunta&#10;a) Opción A&#10;b) Opción B&#10;c) Opción C&#10;d) Opción D&#10;\end{question}" style="font-family:monospace;font-size:0.84rem;"></textarea>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Respuestas <span style="color:var(--text-muted);font-size:0.8rem;">(una por línea: 1.a 2.c …)</span></label>
-                  <textarea class="form-input" id="lq-latex-a" rows="3"
-                    placeholder="1.a&#10;2.b&#10;3.d" style="font-family:monospace;font-size:0.84rem;"></textarea>
-                </div>
-                <div style="display:flex;gap:0.8rem;flex-wrap:wrap;">
-                  <button class="btn btn-ghost" onclick="lqPreviewQuestions()">👁️ Previsualizar</button>
-                  <button class="btn btn-primary" onclick="lqStartSession()">⚡ Crear sala y compartir código</button>
-                </div>
-                <div id="lq-preview" style="margin-top:1rem;"></div>
-              </div>
-            </div>
-
-            <!-- Fase 2: Sala de espera (profesor) -->
-            <div id="live-lobby" class="hidden">
-              <div style="text-align:center;padding:2rem 0 1rem;">
-                <div style="font-size:0.95rem;color:var(--text-muted);margin-bottom:0.5rem;">Código de la sala</div>
-                <div id="lq-code-display" style="font-size:4rem;font-weight:900;letter-spacing:0.3rem;color:var(--primary-light);font-family:monospace;"></div>
-                <p style="color:var(--text-muted);font-size:0.88rem;margin-top:0.5rem;">Los alumnos ingresan este código en su pantalla de inicio</p>
-              </div>
-              <div class="card" style="max-width:500px;margin:0 auto 1.5rem;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
-                  <strong>Jugadores conectados</strong>
-                  <span id="lq-player-count" style="color:var(--primary-light);font-weight:700;">0</span>
-                </div>
-                <div id="lq-players-list" style="display:flex;flex-wrap:wrap;gap:0.5rem;"></div>
-              </div>
-              <div style="display:flex;gap:1rem;justify-content:center;">
-                <button class="btn btn-ghost" onclick="lqCancelSession()">✕ Cancelar</button>
-                <button class="btn btn-primary" id="lq-start-btn" onclick="lqBeginQuiz()" disabled>▶ Iniciar Quiz</button>
-              </div>
-            </div>
-
-            <!-- Fase 3: Control de pregunta (profesor) -->
-            <div id="live-question-ctrl" class="hidden">
-              <div class="lq-host-header">
                 <div>
-                  <span style="font-size:0.85rem;color:var(--text-muted);">Pregunta</span>
-                  <span id="lq-q-counter" style="font-weight:700;font-size:1.1rem;color:var(--primary-light);"> 1 / ?</span>
-                </div>
-                <div id="lq-host-timer" style="font-size:2.5rem;font-weight:900;color:var(--secondary);">20</div>
-                <div>
-                  <span style="font-size:0.85rem;color:var(--text-muted);">Respondieron</span>
-                  <span id="lq-answered-count" style="font-weight:700;font-size:1.1rem;color:var(--secondary);"> 0</span>
+                  <h2 class="text-3xl font-outfit font-bold text-white mb-1">Lanzar Quiz en Vivo</h2>
+                  <p class="text-gray-400">Crea una sala interactiva para tus alumnos instantáneamente.</p>
                 </div>
               </div>
-              <div class="card" style="margin:1rem 0;">
-                <div id="lq-host-question" class="latex-container" style="font-size:1.2rem;font-weight:600;margin-bottom:1rem;"></div>
-                <div id="lq-host-options" class="lq-host-opts"></div>
-              </div>
-              <div style="display:flex;gap:1rem;justify-content:center;">
-                <button class="btn btn-ghost" onclick="lqAbortQuiz()">✕ Terminar</button>
-                <button class="btn btn-primary" id="lq-next-btn" onclick="lqNextQuestion()" style="min-width:180px;">Siguiente →</button>
-              </div>
-              <!-- Marcador entre preguntas -->
-              <div id="lq-scoreboard-mid" class="hidden" style="margin-top:1.5rem;">
-                <h3 style="text-align:center;margin-bottom:1rem;">🏆 Marcador</h3>
-                <div id="lq-scoreboard-rows"></div>
-              </div>
-            </div>
-
-            <!-- Fase 4: Resultado final (profesor) -->
-            <div id="live-final" class="hidden">
-              <div style="text-align:center;padding:2rem 0;">
-                <div style="font-size:3rem;margin-bottom:0.5rem;">🏆</div>
-                <h2 style="margin-bottom:2rem;">¡Quiz terminado!</h2>
-                <div id="lq-final-podium" class="lq-podium"></div>
-                <button class="btn btn-primary" style="margin-top:2rem;" onclick="lqReset()">↩ Nuevo Quiz</button>
+              <div class="hidden md:flex items-center justify-center w-12 h-12 rounded-full bg-white/10 border border-white/20 group-hover:bg-white transition-colors duration-300">
+                <i data-lucide="arrow-right" class="w-6 h-6 text-white group-hover:text-black transition-colors"></i>
               </div>
             </div>
           </div>
 
-        </main>
-      </div>
+          <!-- Quick Stats Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12" id="admin-stats"></div>
+
+          <!-- Recent Activity & Charts -->
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+            <div class="xl:col-span-1">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-outfit font-bold">Actividad Reciente</h3>
+              </div>
+              <div class="glass-card p-4 rounded-3xl border border-white/5 h-[420px] flex flex-col hover:border-white/10 transition-colors">
+                <div id="recent-activity" class="text-gray-400 text-sm leading-relaxed overflow-y-auto custom-scrollbar pr-2 flex-1"></div>
+              </div>
+            </div>
+            
+            <div class="xl:col-span-2 flex flex-col gap-6">
+              <div class="flex items-center justify-between mb-2 relative z-20">
+                <h2 class="text-2xl font-outfit font-bold text-white flex items-center gap-2"><i data-lucide="pie-chart" class="w-6 h-6 text-brand-400"></i> Rendimiento General</h2>
+                <div class="relative w-48 sm:w-64" id="container-analytics-exam-filter">
+                  <select class="hidden" id="analytics-exam-filter" onchange="renderAnalytics()">
+                    <option value="">Todos los exámenes</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 h-[340px]">
+                <div class="glass-card p-5 rounded-3xl border border-white/5 hover:border-white/10 transition-colors flex flex-col">
+                  <h3 class="text-sm font-bold mb-2 text-gray-400 uppercase tracking-wider">Promedios por Examen</h3>
+                  <div class="relative flex-1 w-full"><canvas id="chart-avg-exam"></canvas></div>
+                </div>
+                <div class="glass-card p-5 rounded-3xl border border-white/5 hover:border-white/10 transition-colors flex flex-col">
+                  <h3 class="text-sm font-bold mb-2 text-gray-400 uppercase tracking-wider">Distribución Global</h3>
+                  <div class="relative flex-1 w-full"><canvas id="chart-distribution"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-white/10 transition-colors">
+              <h3 class="text-lg font-outfit font-bold mb-4 text-gray-200">Intentos por día</h3>
+              <div class="relative h-64 w-full"><canvas id="chart-timeline"></canvas></div>
+            </div>
+            <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-white/10 transition-colors">
+              <h3 class="text-lg font-outfit font-bold mb-4 text-gray-200 flex items-center gap-2">❓ Top preguntas más difíciles</h3>
+              <div class="overflow-y-auto custom-scrollbar h-64 pr-2" id="hardest-questions-table"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Alumnos -->
+        <div class="admin-panel hidden w-full fade-in" id="panel-students">
+          <h1 class="text-3xl font-outfit font-bold mb-8">Directorio de Alumnos</h1>
+          
+          <!-- Filtros -->
+          <div class="flex flex-col xl:flex-row flex-wrap gap-4 mb-6 p-4 glass-panel rounded-2xl items-center relative z-20">
+            <div class="relative flex-1 min-w-[250px] w-full">
+              <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"></i>
+              <input type="text" id="filter-search" placeholder="Buscar por nombre o correo..." class="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-brand-400 transition-colors" oninput="applyStudentFilters()" />
+            </div>
+            <div class="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+              <div class="relative w-full sm:w-48" id="container-filter-section">
+                <select id="filter-section" onchange="applyStudentFilters()" class="hidden">
+                  <option value="">Todas las secciones</option>
+                </select>
+              </div>
+              <div class="relative w-full sm:w-48" id="container-filter-role">
+                <select id="filter-role" onchange="applyStudentFilters()" class="hidden">
+                  <option value="">Todos los roles</option>
+                  <option value="student">👤 Alumnos</option>
+                  <option value="admin">👨‍🏫 Profesores</option>
+                </select>
+              </div>
+              <button class="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-gray-300" onclick="renderAdmin()" title="Refrescar">
+                <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-2xl border border-white/10 overflow-hidden">
+            <div class="overflow-x-auto w-full">
+              <table id="students-table" class="w-full text-left text-sm whitespace-nowrap admin-tailwind-table">
+                <thead class="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th class="px-6 py-4 font-semibold">Nombre / Correo</th>
+                    <th class="px-6 py-4 font-semibold">Rol</th>
+                    <th class="px-6 py-4 font-semibold">Sección</th>
+                    <th class="px-6 py-4 font-semibold">Permisos de examen</th>
+                    <th class="px-6 py-4 font-semibold text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="students-tbody" class="divide-y divide-white/5 text-gray-200"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Exámenes -->
+        <div class="admin-panel hidden w-full fade-in" id="panel-exams">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <h1 class="text-3xl font-outfit font-bold">Gestión de Exámenes</h1>
+            <div class="flex flex-wrap gap-3">
+              <button class="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 font-medium transition-colors flex items-center gap-2" onclick="openLatexModal()">
+                <i data-lucide="download" class="w-4 h-4"></i> Importar LaTeX
+              </button>
+              <button class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="openCreateExamModal()">
+                <i data-lucide="plus" class="w-4 h-4"></i> Nuevo examen
+              </button>
+            </div>
+          </div>
+          
+          <div class="glass-card rounded-2xl border border-white/10 overflow-hidden">
+            <div class="overflow-x-auto w-full">
+              <table id="exams-table" class="w-full text-left text-sm whitespace-nowrap admin-tailwind-table">
+                <thead class="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th class="px-6 py-4 font-semibold">Título</th>
+                    <th class="px-6 py-4 font-semibold w-full">Descripción</th>
+                    <th class="px-6 py-4 font-semibold text-center">Preguntas</th>
+                    <th class="px-6 py-4 font-semibold text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="exams-tbody" class="divide-y divide-white/5 text-gray-200"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Material -->
+        <div class="admin-panel hidden w-full fade-in" id="panel-material">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+            <h1 class="text-3xl font-outfit font-bold">Material de Estudio</h1>
+            <button class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="openAddMaterialModal()">
+              <i data-lucide="plus" class="w-4 h-4"></i> Agregar material
+            </button>
+          </div>
+          <p class="text-gray-400 text-sm mb-8 max-w-2xl px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
+            <i data-lucide="info" class="inline w-4 h-4 text-brand-400 mr-1"></i> El <strong>Título</strong> debe coincidir exactamente con el título del examen para que el alumno vea el material cuando tenga permiso.
+          </p>
+          
+          <div class="glass-card rounded-2xl border border-white/10 overflow-hidden">
+            <div class="overflow-x-auto w-full">
+              <table id="material-table" class="w-full text-left text-sm whitespace-nowrap admin-tailwind-table">
+                <thead class="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th class="px-6 py-4 font-semibold">Módulo (Examen)</th>
+                    <th class="px-6 py-4 font-semibold">Nombre del archivo</th>
+                    <th class="px-6 py-4 font-semibold" style="width:35%">Link de Drive</th>
+                    <th class="px-6 py-4 font-semibold text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="material-tbody" class="divide-y divide-white/5 text-gray-200"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Anuncios -->
+        <div class="admin-panel hidden w-full fade-in" id="panel-announcements">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <h1 class="text-3xl font-outfit font-bold">Tablero de Anuncios</h1>
+            <button class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="openAddAnnouncementModal()">
+              <i data-lucide="plus" class="w-4 h-4"></i> Nuevo aviso
+            </button>
+          </div>
+          
+          <div class="glass-card rounded-2xl border border-white/10 overflow-hidden">
+            <div class="overflow-x-auto w-full">
+              <table id="announcements-table" class="w-full text-left text-sm whitespace-nowrap admin-tailwind-table">
+                <thead class="bg-white/5 text-gray-400 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th class="px-6 py-4 font-semibold">Título</th>
+                    <th class="px-6 py-4 font-semibold w-full">Contenido</th>
+                    <th class="px-6 py-4 font-semibold text-center">Estado</th>
+                    <th class="px-6 py-4 font-semibold text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="announcements-tbody" class="divide-y divide-white/5 text-gray-200"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Mensajes -->
+        <div class="admin-panel hidden w-full fade-in" id="panel-messages">
+          <h1 class="text-3xl font-outfit font-bold mb-8 flex items-center gap-3">
+            <div class="p-2 bg-brand-500/20 rounded-xl text-brand-400"><i data-lucide="inbox" class="w-6 h-6"></i></div> Bandeja de entrada
+          </h1>
+          <div id="inbox-list" class="flex flex-col gap-4">
+            <div class="w-full p-8 text-center text-gray-400 flex flex-col items-center justify-center">
+              <i data-lucide="loader" class="w-8 h-8 animate-spin mb-3"></i> Cargando mensajes...
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel: Quiz en Vivo -->
+        <div class="admin-panel hidden w-full fade-in" id="panel-live">
+          
+          <!-- Lado A: Setup -->
+          <div id="live-setup" class="max-w-3xl mx-auto">
+            <div class="text-center mb-8">
+              <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-[#ff007f] shadow-[0_0_30px_rgba(255,0,127,0.4)] mb-4">
+                <i data-lucide="zap" class="w-8 h-8 text-white"></i>
+              </div>
+              <h1 class="text-3xl font-outfit font-bold mb-2 text-white">Quiz en Vivo</h1>
+              <p class="text-gray-400">Lanza un cuestionario rápido para todos los alumnos conectados en sala.</p>
+            </div>
+            
+            <div class="glass-card rounded-3xl border border-white/10 p-6 md:p-8">
+              <div class="flex flex-col gap-5">
+                <div>
+                  <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Título de la Sesión</label>
+                  <input type="text" id="lq-title" placeholder="Ej: Repaso sorpresa 💥" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-400 transition-colors" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1 flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4"></i> Segundos por pregunta</label>
+                  <input type="number" id="lq-time" value="20" min="5" max="120" class="w-full sm:w-32 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 transition-colors" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Cuerpo de Preguntas <span class="text-xs font-normal opacity-70">(Soporta sintaxis LaTeX \question)</span></label>
+                  <textarea id="lq-latex-q" rows="6" placeholder="\question ¿Cuánto es 2+2?&#10;a) 3&#10;b) 4&#10;c) 5&#10;d) Ninguna&#10;\end{question}" class="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-green-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar"></textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Hoja de Respuestas <span class="text-xs font-normal opacity-70">(Una por renglón ej: 1.a)</span></label>
+                  <textarea id="lq-latex-a" rows="3" placeholder="1.b" class="w-full bg-black/50 border border-white/10 rounded-xl p-4 text-brand-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar"></textarea>
+                </div>
+                
+                <div class="flex flex-wrap gap-4 mt-4 pt-4 border-t border-white/10">
+                  <button class="flex-1 py-3.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 font-semibold transition-all flex items-center justify-center gap-2" onclick="lqPreviewQuestions()">
+                    <i data-lucide="eye" class="w-5 h-5"></i> Previsualizar
+                  </button>
+                  <button class="flex-[2] py-3.5 rounded-xl bg-gradient-to-r from-[#ff007f] to-brand-400 hover:to-brand-500 text-white font-bold shadow-[0_0_20px_rgba(255,0,127,0.3)] transition-all hover:scale-[1.02] flex items-center justify-center gap-2" onclick="lqStartSession()">
+                    <i data-lucide="radio" class="w-5 h-5"></i> Abrir Sala
+                  </button>
+                </div>
+              </div>
+              <div id="lq-preview" class="mt-6"></div>
+            </div>
+          </div>
+
+          <!-- Lado B: Sala (Lobby) -->
+          <div id="live-lobby" class="hidden flex flex-col items-center justify-center min-h-[70vh] w-full max-w-4xl mx-auto py-10" data-aos="zoom-in">
+            <h2 class="text-gray-400 text-lg uppercase tracking-widest font-bold mb-2">Código de Ingreso</h2>
+            <div id="lq-code-display" class="font-mono text-7xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-[#ff007f] tracking-[0.2em] drop-shadow-[0_0_30px_rgba(255,0,127,0.5)] mb-10"></div>
+            
+            <div class="glass-card w-full p-6 md:p-8 rounded-[2rem] border border-white/10 mb-8 min-h-[200px]">
+              <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+                <h3 class="text-xl font-outfit font-bold flex items-center gap-2"><i data-lucide="users" class="text-brand-400"></i> Jugadores</h3>
+                <span class="px-4 py-1.5 rounded-full bg-brand-400/20 text-brand-400 font-black text-xl" id="lq-player-count">0</span>
+              </div>
+              <div id="lq-players-list" class="flex flex-wrap gap-3 max-h-[40vh] overflow-y-auto custom-scrollbar"></div>
+            </div>
+            
+            <div class="flex gap-4 w-full md:w-auto">
+              <button class="flex-1 md:flex-none px-6 py-4 rounded-xl border border-white/10 hover:bg-white/5 text-gray-400 hover:text-white font-semibold transition-colors flex items-center justify-center gap-2" onclick="lqCancelSession()">
+                <i data-lucide="x" class="w-5 h-5"></i> Cancelar
+              </button>
+              <button class="flex-1 md:flex-none px-12 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 text-white font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale" id="lq-start-btn" onclick="lqBeginQuiz()" disabled>
+                <i data-lucide="play" class="w-6 h-6"></i> Iniciar
+              </button>
+            </div>
+          </div>
+
+          <!-- Lado C: Host Control -->
+          <div id="live-question-ctrl" class="hidden w-full max-w-5xl mx-auto py-6" data-aos="fade-up">
+            <div class="glass-card rounded-3xl border border-white/10 p-6 md:p-10 mb-8 flex flex-col items-center text-center">
+              
+              <div class="w-full flex justify-between items-center mb-10 text-left">
+                <div class="bg-white/5 px-4 py-2 rounded-xl">
+                  <span class="block text-xs text-gray-400 font-bold uppercase tracking-wider">Avance</span>
+                  <span class="text-xl font-black text-brand-400" id="lq-q-counter"> 1 / ?</span>
+                </div>
+                <div class="w-24 h-24 rounded-full bg-brand-900 border-4 border-brand-400 shadow-[0_0_20px_rgba(155,135,245,0.4)] flex justify-center items-center">
+                  <span id="lq-host-timer" class="text-4xl font-black text-white">20</span>
+                </div>
+                <div class="bg-white/5 px-4 py-2 rounded-xl text-right">
+                  <span class="block text-xs text-gray-400 font-bold uppercase tracking-wider">Respuestas</span>
+                  <span class="text-xl font-black text-emerald-400" id="lq-answered-count"> 0</span>
+                </div>
+              </div>
+              
+              <div id="lq-host-question" class="latex-container w-full text-2xl md:text-3xl font-bold mb-10 min-h-[120px] text-center"></div>
+              <div id="lq-host-options" class="flex flex-col gap-3 w-full max-w-2xl lq-host-opts"></div>
+            </div>
+            
+            <div class="flex justify-center gap-4">
+              <button class="px-6 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 font-medium transition-colors" onclick="lqAbortQuiz()">Terminar Quiz</button>
+              <button class="px-10 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 hover:scale-[1.02] transition-transform" id="lq-next-btn" onclick="lqNextQuestion()">Siguiente →</button>
+            </div>
+            
+            <!-- Marcador Interno de Host -->
+            <div id="lq-scoreboard-mid" class="hidden glass-card rounded-3xl border border-white/10 p-6 mt-10 max-w-3xl mx-auto">
+              <h3 class="text-xl font-outfit font-bold mb-6 flex items-center gap-2 justify-center"><i data-lucide="trophy" class="w-6 h-6 text-yellow-400"></i> Tabla de Liderazgo Mínima</h3>
+              <div id="lq-scoreboard-rows" class="flex flex-col gap-3"></div>
+            </div>
+          </div>
+
+          <!-- Lado D: Final -->
+          <div id="live-final" class="hidden flex flex-col items-center justify-center py-20">
+            <div class="text-8xl mb-8 animate-bounce">🏆</div>
+            <h2 class="font-outfit text-5xl font-black mb-16 text-white text-center">¡El Quiz ha terminado!</h2>
+            <div id="lq-final-podium" class="w-full max-w-4xl flex justify-center items-end gap-2 sm:gap-6 h-64 mb-16"></div>
+            <button class="px-8 py-4 rounded-xl bg-white border border-white text-black font-bold text-lg hover:bg-transparent hover:text-white transition-all shadow-[0_0_30px_rgba(255,255,255,0.3)]" onclick="lqReset()">Iniciar un nuevo Quiz</button>
+          </div>
+        </div>
+
+      </main>
     </div>
-
   </div><!-- #app -->
 
   <!-- ======================== MODAL: CREAR/EDITAR EXAMEN ======================== -->
-  <div class="modal-overlay hidden" id="modal-exam">
-    <div class="modal">
-      <div class="modal-header">
-        <span class="modal-title" id="modal-exam-title">Nuevo examen</span>
-        <button class="modal-close" onclick="closeModal('modal-exam')">✕</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-exam">
+    <div class="glass-card w-full max-w-2xl rounded-3xl border border-white/10 flex flex-col max-h-[90vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      
+      <div class="flex items-center justify-between p-6 border-b border-white/10">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2" id="modal-exam-title"><i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Nuevo examen</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-exam')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Título del examen</label>
-          <input class="form-input" type="text" id="exam-title-input" placeholder="Ej: Álgebra — Unidad 1" />
+
+      <div class="p-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col gap-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Título del examen</label>
+          <input type="text" id="exam-title-input" placeholder="Ej: Álgebra — Unidad 1" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Descripción</label>
-          <input class="form-input" type="text" id="exam-desc-input" placeholder="Breve descripción del examen" />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Descripción</label>
+          <input type="text" id="exam-desc-input" placeholder="Breve descripción del examen" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Ícono (emoji)</label>
-          <input class="form-input" type="text" id="exam-icon-input" placeholder="📚" maxlength="4"
-            style="width:80px;text-align:center;font-size:1.4rem;" />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Ícono (emoji)</label>
+          <input type="text" id="exam-icon-input" placeholder="📚" maxlength="4" class="w-20 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white text-center text-xl focus:outline-none focus:ring-2 focus:ring-brand-400" />
         </div>
 
-        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
-          <div class="form-group" style="flex:1;min-width:120px;">
-            <label class="form-label">Máx. intentos <span style="color:var(--text-muted);font-size:0.76rem;">(0 =
-                ilimitado)</span></label>
-            <input class="form-input" type="number" id="exam-max-attempts" min="0" value="0" style="width:90px;" />
+        <div class="flex gap-4 flex-wrap">
+          <div class="flex-1 min-w-[120px]">
+            <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Máx. intentos <span class="text-xs opacity-70">(0 = sin límite)</span></label>
+            <input type="number" id="exam-max-attempts" min="0" value="0" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
-          <div class="form-group" style="flex:1;min-width:120px;">
-            <label class="form-label">⏱️ Tiempo límite <span style="color:var(--text-muted);font-size:0.76rem;">(min, 0
-                = sin límite)</span></label>
-            <input class="form-input" type="number" id="exam-time-limit" min="0" value="0" style="width:90px;" />
+          <div class="flex-1 min-w-[120px]">
+            <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1 flex items-center gap-1"><i data-lucide="clock" class="w-4 h-4"></i> Límite <span class="text-xs opacity-70">(min, 0 = no)</span></label>
+            <input type="number" id="exam-time-limit" min="0" value="0" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
           </div>
-          <div class="form-group" style="flex:1;display:flex;align-items:center;gap:0.6rem;padding-top:1.6rem;">
-            <input type="checkbox" id="exam-shuffle" style="width:18px;height:18px;accent-color:var(--primary);" />
-            <label for="exam-shuffle" class="form-label" style="margin:0;cursor:pointer;">Mezclar preguntas</label>
+          <div class="flex-1 min-w-[150px] flex items-center gap-3 pt-6">
+            <input type="checkbox" id="exam-shuffle" class="w-5 h-5 rounded border-gray-600 text-brand-500 focus:ring-brand-500 bg-black/30" />
+            <label for="exam-shuffle" class="text-sm font-medium text-gray-300 cursor-pointer">Mezclar preguntas</label>
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:0.5rem;">
-          <label class="form-label" style="margin:0;">Preguntas</label>
-          <button class="btn btn-ghost btn-sm" onclick="addQuestionBlock()">+ Pregunta</button>
+        <div class="flex items-center justify-between mt-4 pb-2 border-b border-white/10">
+          <label class="font-outfit font-bold text-lg text-white">Preguntas</label>
+          <button class="px-4 py-2 rounded-lg bg-brand-500/20 text-brand-400 hover:bg-brand-500/30 text-sm font-bold transition-colors flex items-center gap-2" onclick="addQuestionBlock()">
+            <i data-lucide="plus" class="w-4 h-4"></i> Añadir Pregunta
+          </button>
         </div>
-        <div id="questions-builder" style="display:flex;flex-direction:column;gap:1rem;"></div>
+        <div id="questions-builder" class="flex flex-col gap-6 mt-2"></div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modal-exam')">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveExam()">💾 Guardar examen</button>
+
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-exam')">Cancelar</button>
+        <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="saveExam()">
+          <i data-lucide="save" class="w-4 h-4"></i> Guardar
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: EDITAR ALUMNO ======================== -->
-  <div class="modal-overlay hidden" id="modal-student">
-    <div class="modal">
-      <div class="modal-header">
-        <span class="modal-title">Editar alumno</span>
-        <button class="modal-close" onclick="closeModal('modal-student')">✕</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-student">
+    <div class="glass-card w-full max-w-lg rounded-3xl border border-white/10 flex flex-col max-h-[90vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      
+      <div class="flex items-center justify-between p-6 border-b border-white/10">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2"><i data-lucide="user-edit" class="w-5 h-5 text-brand-400"></i> Editar alumno</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-student')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
+
+      <div class="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-5">
         <input type="hidden" id="edit-student-email" />
-        <div class="form-group">
-          <label class="form-label">Nombre</label>
-          <input class="form-input" type="text" id="edit-student-name" readonly style="opacity:0.6;cursor:default;" />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Nombre</label>
+          <input type="text" id="edit-student-name" readonly class="w-full bg-black/50 border border-white/5 rounded-xl px-4 py-3 text-gray-500 cursor-not-allowed" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Sección</label>
-          <input class="form-input" type="text" id="edit-student-section" placeholder="Ej: 3A, Grupo 2..." />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Sección</label>
+          <input type="text" id="edit-student-section" placeholder="Ej: 3A, Grupo 2..." class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Permisos de examen</label>
-          <div id="edit-perms-list" style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.4rem;"></div>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.5rem;">Activa los exámenes que el alumno
-            puede realizar.</p>
+        <div class="mt-2">
+          <label class="block text-sm font-medium text-white mb-3 ml-1">Permisos de examen</label>
+          <div id="edit-perms-list" class="flex flex-col gap-3 bg-black/20 p-4 rounded-xl border border-white/5 max-h-60 overflow-y-auto custom-scrollbar"></div>
+          <p class="text-xs text-gray-500 mt-3 flex items-center gap-1"><i data-lucide="info" class="w-3 h-3 text-brand-400"></i> Activa los exámenes que el alumno puede realizar.</p>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modal-student')">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveStudentEdit()">💾 Guardar cambios</button>
+
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-student')">Cancelar</button>
+        <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="saveStudentEdit()">
+          <i data-lucide="save" class="w-4 h-4"></i> Guardar Cambios
+        </button>
       </div>
     </div>
   </div>
 
 
   <!-- ======================== MODAL: IMPORTAR LATEX ======================== -->
-  <div class="modal-overlay hidden" id="modal-latex">
-    <div class="modal" style="max-width:700px;">
-      <div class="modal-header">
-        <span class="modal-title">📥 Importar preguntas desde LaTeX</span>
-        <button class="modal-close" onclick="closeModal('modal-latex')">✕</button>
-      </div>
-      <div class="modal-body">
-
-        <div class="latex-tip">
-          <strong>💡 ¿Cómo funciona?</strong> Pega tus preguntas en formato LaTeX, opcionalmente las respuestas, y haz
-          clic en
-          <em>Importar</em>. Se abrirá el editor de exámenes con todo precargado.
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Preguntas (LaTeX) <span style="color:var(--danger);">*</span></label>
-          <textarea class="form-input latex-textarea" id="latex-questions" placeholder="Pega aquí las preguntas. Ejemplo:
-\item ¿Cuál es la capital de México?
-\begin{enumerate}[label=\Alph*)]
-    \item Guadalajara
-    \item Ciudad de México
-    \item Monterrey
-    \item Puebla
-\end{enumerate}
-
-\item Siguiente pregunta..." oninput="updateLatexPreview()"></textarea>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Respuestas (opcional)</label>
-          <textarea class="form-input latex-textarea latex-textarea-sm" id="latex-answers" placeholder="Pega aquí las respuestas si las tienes. Ejemplo:
-\begin{itemize}
-    \item 1. B
-    \item 2. C
-    \item 3. A
-\end{itemize}" oninput="updateLatexPreview()"></textarea>
-        </div>
-
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-latex">
+    <div class="glass-card w-full max-w-4xl rounded-3xl border border-white/10 flex flex-col max-h-[90vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-brand-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2">
+          <div class="p-2 bg-brand-500/20 rounded-lg text-brand-400"><i data-lucide="download-cloud" class="w-5 h-5"></i></div> Importar preguntas desde LaTeX
+        </h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-latex')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Justificaciones (opcional)</label>
-        <textarea class="form-input latex-textarea latex-textarea-sm" id="latex-justifications" placeholder="Pega aquí la justificación numerada de cada respuesta. Ejemplo:
-1. El artículo 3° constitucional establece que la educación será laica y gratuita.
-2. La segunda ley de Newton define F = ma, por lo que la opción C es correcta.
-3. Por definición, los gases ideales..."></textarea>
+      <div class="p-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col gap-6">
+        <div class="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-sm flex gap-3">
+          <i data-lucide="lightbulb" class="w-5 h-5 shrink-0 mt-0.5"></i>
+          <div>
+            <strong class="text-blue-200">¿Cómo funciona?</strong> Pega tus preguntas en formato LaTeX (opcionalmente las respuestas y justificaciones), y haz clic en importar. Se abrirá el editor de exámenes con todo precargado automáticamente.
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-white flex items-center gap-2">
+              Preguntas (LaTeX) <span class="bg-red-500/20 text-red-400 text-[0.65rem] px-2 py-0.5 rounded uppercase font-bold tracking-wider">Requerido</span>
+            </label>
+            <textarea id="latex-questions" class="w-full h-80 bg-black/50 border border-white/10 rounded-xl p-4 text-brand-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar leading-relaxed" placeholder="\item ¿Cuál es la capital de México?&#10;\begin{enumerate}[label=\Alph*)]&#10;    \item Guadalajara&#10;    \item Ciudad de México&#10;    \item Monterrey&#10;    \item Puebla&#10;\end{enumerate}&#10;&#10;\item Siguiente pregunta..." oninput="updateLatexPreview()"></textarea>
+          </div>
+          
+          <div class="flex flex-col gap-6">
+            <div class="flex flex-col gap-2 flex-1">
+              <label class="text-sm font-medium text-gray-400">Respuestas <span class="text-xs opacity-70">(Opcional)</span></label>
+              <textarea id="latex-answers" class="w-full h-full min-h-[140px] bg-black/50 border border-white/10 rounded-xl p-4 text-emerald-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar leading-relaxed" placeholder="\begin{itemize}&#10;    \item 1. B&#10;    \item 2. C&#10;    \item 3. A&#10;\end{itemize}" oninput="updateLatexPreview()"></textarea>
+            </div>
+            <div class="flex flex-col gap-2 flex-1">
+              <label class="text-sm font-medium text-gray-400">Justificaciones <span class="text-xs opacity-70">(Opcional)</span></label>
+              <textarea id="latex-justifications" class="w-full h-full min-h-[140px] bg-black/50 border border-white/10 rounded-xl p-4 text-yellow-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar leading-relaxed" placeholder="1. El artículo 3° establece...&#10;2. La segunda ley de Newton..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div id="latex-preview-info" class="mt-2 text-sm text-gray-400 text-center font-medium bg-white/5 py-2 rounded-lg"></div>
       </div>
 
-      <div id="latex-preview-info"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modal-latex')">Cancelar</button>
-      <button class="btn btn-primary" onclick="importLatex()">📥 Importar y editar</button>
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-latex')">Cancelar</button>
+        <button class="px-8 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="importLatex()">
+          <i data-lucide="zap" class="w-4 h-4"></i> Importar y Editar
+        </button>
+      </div>
     </div>
   </div>
   </div>
 
   <!-- ======================== MODAL: AGREGAR/EDITAR MATERIAL ======================== -->
-  <div class="modal-overlay hidden" id="modal-material">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <span class="modal-title" id="modal-material-title">Agregar material</span>
-        <button class="modal-close" onclick="closeModal('modal-material')">✕</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-material">
+    <div class="glass-card w-full max-w-md rounded-3xl border border-white/10 flex flex-col max-h-[90vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-emerald-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2" id="modal-material-title"><i data-lucide="book-open" class="w-5 h-5 text-emerald-400"></i> Agregar Material</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-material')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
+
+      <div class="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-5">
         <input type="hidden" id="mat-edit-id" />
-        <div class="form-group">
-          <label class="form-label">Título del módulo <span style="color:var(--danger)">*</span></label>
-          <input class="form-input" type="text" id="mat-title" placeholder="Ej: Módulo 11" />
-          <p style="font-size:0.76rem;color:var(--text-muted);margin-top:0.3rem;">Usa el mismo título que el examen para
-            que el permiso lo desbloquee automáticamente.</p>
+        
+        <div class="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-2 flex items-start gap-3">
+          <i data-lucide="info" class="w-4 h-4 text-blue-400 shrink-0 mt-0.5"></i>
+          <p class="text-xs text-blue-200">Si el <strong>Título del módulo</strong> coincide con el de un Examen, el permiso se desbloquea en conjunto.</p>
         </div>
-        <div class="form-group">
-          <label class="form-label">Nombre del archivo <span style="color:var(--danger)">*</span></label>
-          <input class="form-input" type="text" id="mat-filename"
-            placeholder="Ej: Unidad 1 — Fundamentos de Geopolítica" />
+
+        <div>
+          <label class="block text-sm font-medium text-white mb-1.5 ml-1">Título del módulo <span class="text-red-400">*</span></label>
+          <input type="text" id="mat-title" placeholder="Ej: Módulo 11" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Link de Google Drive <span style="color:var(--danger)">*</span></label>
-          <input class="form-input" type="url" id="mat-link" placeholder="https://drive.google.com/file/d/.../view" />
-          <p style="font-size:0.76rem;color:var(--text-muted);margin-top:0.3rem;">El archivo debe ser público en Drive:
-            <em>Cualquiera con el link puede ver</em>.
-          </p>
+        <div>
+          <label class="block text-sm font-medium text-white mb-1.5 ml-1">Nombre del archivo <span class="text-red-400">*</span></label>
+          <input type="text" id="mat-filename" placeholder="Ej: Unidad 1 — Fundamentos" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400" />
         </div>
-        <div style="display:flex;gap:1rem;">
-          <div class="form-group" style="flex:0 0 80px;">
-            <label class="form-label">Ícono</label>
-            <input class="form-input" type="text" id="mat-icon" value="📄" maxlength="4"
-              style="text-align:center;font-size:1.3rem;" />
+        <div>
+          <label class="block text-sm font-medium text-white mb-1.5 ml-1">Link de Google Drive <span class="text-red-400">*</span></label>
+          <div class="relative">
+            <i data-lucide="link" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4"></i>
+            <input type="url" id="mat-link" placeholder="https://drive.google.com/..." class="w-full bg-black/30 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono text-sm" />
           </div>
-          <div class="form-group" style="flex:1;">
-            <label class="form-label">Orden (dentro del módulo)</label>
-            <input class="form-input" type="number" id="mat-order" value="0" min="0" />
+        </div>
+        <div class="flex gap-4">
+          <div class="w-24 shrink-0">
+            <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Ícono</label>
+            <input type="text" id="mat-icon" value="📄" maxlength="4" class="w-full bg-black/30 border border-white/10 rounded-xl px-2 py-3 text-white text-center text-xl focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          </div>
+          <div class="flex-1">
+            <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Orden interno</label>
+            <input type="number" id="mat-order" value="0" min="0" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modal-material')">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveMaterial()">💾 Guardar</button>
+
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-material')">Cancelar</button>
+        <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-400 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold shadow-lg shadow-emerald-400/20 transition-all flex items-center gap-2" onclick="saveMaterial()">
+          <i data-lucide="save" class="w-4 h-4"></i> Guardar
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: MI HISTORIAL ======================== -->
-  <div class="modal-overlay hidden" id="modal-history">
-    <div class="modal" style="max-width:600px;">
-      <div class="modal-header">
-        <span class="modal-title">📊 Mi Historial de Intentos</span>
-        <button class="modal-close" onclick="closeModal('modal-history')">✕</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-history">
+    <div class="glass-card w-full max-w-2xl rounded-3xl border border-white/10 flex flex-col max-h-[90vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-brand-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-2xl font-outfit font-bold text-white flex items-center gap-3"><i data-lucide="history" class="w-6 h-6 text-brand-400"></i> Mi Historial de Intentos</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-history')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body" id="history-modal-body" style="max-height:460px;overflow-y:auto;"></div>
-      <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('modal-history')">Cerrar</button>
+      <div class="p-6 overflow-y-auto custom-scrollbar flex-1 text-left bg-black/20" id="history-modal-body"></div>
+      <div class="p-6 border-t border-white/10 text-center rounded-b-3xl">
+        <button class="px-8 py-3 w-full sm:w-auto rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all" onclick="closeModal('modal-history')">Cerrar</button>
       </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: RANKING ======================== -->
-  <div class="modal-overlay hidden" id="modal-leaderboard">
-    <div class="modal" style="max-width:560px;">
-      <div class="modal-header">
-        <span class="modal-title">🏆 Ranking del Grupo</span>
-        <button class="modal-close" onclick="closeModal('modal-leaderboard')">✕</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-leaderboard">
+    <div class="glass-card w-full max-w-xl rounded-3xl border border-white/10 flex flex-col max-h-[85vh] shadow-2xl shadow-yellow-500/10" data-aos="zoom-in" data-aos-duration="300">
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-b from-yellow-500/10 to-transparent rounded-t-3xl text-center flex-col relative">
+        <button class="absolute right-4 top-4 p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-leaderboard')"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-600 flex items-center justify-center mb-3 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+          <i data-lucide="trophy" class="w-8 h-8 text-black"></i>
+        </div>
+        <h3 class="text-2xl font-outfit font-black text-white">Ranking del Grupo</h3>
       </div>
-      <div class="modal-body" id="leaderboard-modal-body" style="max-height:460px;overflow-y:auto;"></div>
-      <div class="modal-footer"><button class="btn btn-primary"
-          onclick="closeModal('modal-leaderboard')">Cerrar</button></div>
+      <div class="p-6 overflow-y-auto custom-scrollbar flex-1 text-left" id="leaderboard-modal-body"></div>
+      <div class="p-6 border-t border-white/10 text-center bg-black/30 rounded-b-3xl">
+        <button class="px-8 py-3 w-full rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 font-bold transition-all" onclick="closeModal('modal-leaderboard')">Cerrar Tabla</button>
+      </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: CAMBIAR CONTRASEÑA ======================== -->
-  <div class="modal-overlay hidden" id="modal-change-pw">
-    <div class="modal" style="max-width:420px;">
-      <div class="modal-header">
-        <span class="modal-title">🔑 Cambiar Contraseña</span>
-        <button class="modal-close" onclick="closeModal('modal-change-pw')">✕</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-change-pw">
+    <div class="glass-card w-full max-w-sm rounded-3xl border border-white/10 flex flex-col shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-red-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2"><i data-lucide="key" class="w-5 h-5 text-red-400"></i> Cambiar Contraseña</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-change-pw')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Contraseña actual</label>
-          <input class="form-input" type="password" id="pw-current" placeholder="Tu contraseña actual" />
+      <div class="p-6 flex flex-col gap-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Contraseña actual</label>
+          <input type="password" id="pw-current" placeholder="La que usas para iniciar sesión" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 font-mono" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Nueva contraseña</label>
-          <input class="form-input" type="password" id="pw-new" placeholder="Mínimo 6 caracteres" />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Nueva contraseña</label>
+          <input type="password" id="pw-new" placeholder="Mínimo 6 caracteres" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 font-mono" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Confirmar nueva contraseña</label>
-          <input class="form-input" type="password" id="pw-confirm" placeholder="Repite la nueva contraseña" />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Confirmar nueva contraseña</label>
+          <input type="password" id="pw-confirm" placeholder="Repite la nueva contraseña" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 font-mono" />
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modal-change-pw')">Cancelar</button>
-        <button class="btn btn-primary" onclick="changePassword()">💾 Cambiar</button>
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-change-pw')">Cancelar</button>
+        <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold shadow-lg shadow-red-500/20 transition-all flex items-center gap-2" onclick="changePassword()">
+          <i data-lucide="check" class="w-4 h-4"></i> Actualizar
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: ANUNCIO ======================== -->
-  <div class="modal-overlay hidden" id="modal-announcement">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <span class="modal-title" id="modal-ann-title">Nuevo anuncio</span>
-        <button class="modal-close" onclick="closeModal('modal-announcement')">&#x2715;</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-announcement">
+    <div class="glass-card w-full max-w-lg rounded-3xl border border-white/10 flex flex-col max-h-[90vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-brand-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2" id="modal-ann-title"><i data-lucide="megaphone" class="w-5 h-5 text-brand-400"></i> Nuevo anuncio</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-announcement')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
+      <div class="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-5">
         <input type="hidden" id="ann-edit-id" />
-        <div class="form-group">
-          <label class="form-label">Título <span style="color:var(--danger)">*</span></label>
-          <input class="form-input" type="text" id="ann-title" placeholder="Ej: Recordatorio — Examen del Módulo 3" />
+        <div>
+          <label class="block text-sm font-medium text-white mb-1.5 ml-1">Título <span class="text-red-400">*</span></label>
+          <input type="text" id="ann-title" placeholder="Ej: Recordatorio — Examen del Módulo 3" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Contenido</label>
-          <textarea class="form-input" id="ann-content" rows="3" style="resize:vertical;"
-            placeholder="Detalles del anuncio..."></textarea>
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Contenido</label>
+          <textarea id="ann-content" rows="4" placeholder="Detalles del anuncio..." class="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar"></textarea>
         </div>
-        <div class="form-group">
-          <label class="form-label">🔗 Link (Google Drive, PDF, sitio web…)</label>
-          <input class="form-input" type="url" id="ann-link" placeholder="https://drive.google.com/file/d/.../view" />
-          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem;">Los alumnos verán un botón para abrir
-            este enlace.</p>
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1 flex items-center gap-1"><i data-lucide="link" class="w-4 h-4"></i> Enlace Adjunto <span class="text-xs opacity-70">(Opcional)</span></label>
+          <input type="url" id="ann-link" placeholder="https://drive.google.com/..." class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 font-mono text-sm" />
         </div>
-        <div class="form-group">
-          <label class="form-label">🖼️ URL de imagen de banner (opcional)</label>
-          <input class="form-input" type="url" id="ann-image"
-            placeholder="https://i.imgur.com/... ó link directo de imagen" />
-          <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem;">Pega la URL de una imagen. Click =
-            zoom completo para los alumnos.</p>
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1 flex items-center gap-1"><i data-lucide="image" class="w-4 h-4"></i> URL de Imagen de Banner <span class="text-xs opacity-70">(Opcional)</span></label>
+          <input type="url" id="ann-image" placeholder="https://i.imgur.com/...png" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 font-mono text-sm" />
         </div>
-        <div class="form-group" style="display:flex;align-items:center;gap:0.6rem;">
-          <input type="checkbox" id="ann-active" checked
-            style="width:18px;height:18px;accent-color:var(--secondary);" />
-          <label for="ann-active" class="form-label" style="margin:0;cursor:pointer;">Visible para alumnos</label>
+        <div class="flex items-center gap-3 pt-2">
+          <input type="checkbox" id="ann-active" checked class="w-5 h-5 rounded border-gray-600 text-brand-500 focus:ring-brand-500 bg-black/30" />
+          <label for="ann-active" class="font-medium text-white cursor-pointer">Visible para los alumnos en Dashboard</label>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modal-announcement')">Cancelar</button>
-        <button class="btn btn-primary" onclick="saveAnnouncement()">&#x1F4BE; Guardar</button>
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-announcement')">Cancelar</button>
+        <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="saveAnnouncement()">
+          <i data-lucide="send" class="w-4 h-4"></i> Publicar
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: LIGHTBOX IMAGEN ======================== -->
-  <div class="modal-overlay hidden" id="modal-lightbox" onclick="closeModal('modal-lightbox')"
-    style="background:rgba(0,0,0,0.92);cursor:zoom-out;">
-    <div style="max-width:92vw;max-height:92vh;position:relative;">
-      <img id="lightbox-img" src="" alt="Banner"
-        style="max-width:100%;max-height:90vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.8);display:block;" />
-      <button onclick="closeModal('modal-lightbox')"
-        style="position:absolute;top:-14px;right:-14px;background:var(--danger);border:none;color:#fff;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">&#x2715;</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md cursor-zoom-out" id="modal-lightbox" onclick="closeModal('modal-lightbox')">
+    <div class="relative max-w-[95vw] max-h-[95vh]" data-aos="zoom-out" data-aos-duration="200">
+      <img id="lightbox-img" src="" alt="Zoom" class="max-w-full max-h-[90vh] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] border border-white/10" />
+      <button class="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-black flex items-center justify-center text-white border-2 border-white/20 hover:bg-white/10 transition-colors shadow-lg shadow-black/50" onclick="closeModal('modal-lightbox')">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
     </div>
   </div>
 
   <!-- ======================== MODAL: COMPONER MENSAJE ======================== -->
-  <div class="modal-overlay hidden" id="modal-compose">
-    <div class="modal" style="max-width:500px;">
-      <div class="modal-header">
-        <span class="modal-title" id="compose-title">&#x1F4AC; Enviar mensaje</span>
-        <button class="modal-close" onclick="closeModal('modal-compose')">&#x2715;</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-compose">
+    <div class="glass-card w-full max-w-lg rounded-3xl border border-white/10 flex flex-col shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-brand-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2" id="compose-title"><i data-lucide="message-square" class="w-5 h-5 text-brand-400"></i> Nuevo Mensaje</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-compose')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
-        <!-- Tabs: Mensaje o Sugerencia -->
-        <div class="compose-tabs">
-          <button class="compose-tab active" id="tab-msg" onclick="setComposeMode('message')">&#x1F464; Mensaje a
-            profesor</button>
-          <button class="compose-tab" id="tab-sug" onclick="setComposeMode('suggestion')">&#x1F4A1; Sugerencia</button>
+      <div class="p-6 flex flex-col gap-6">
+        
+        <div class="flex p-1 bg-black/40 rounded-xl border border-white/5 mx-auto w-full max-w-xs compose-tabs">
+          <button class="flex-1 py-2 text-sm font-bold rounded-lg text-white bg-white/10 shadow-sm transition-all compose-tab active" id="tab-msg" onclick="setComposeMode('message')">Al Profesor</button>
+          <button class="flex-1 py-2 text-sm font-bold rounded-lg text-gray-400 hover:text-white transition-all compose-tab" id="tab-sug" onclick="setComposeMode('suggestion')">Sugerencia</button>
         </div>
 
-        <!-- Selector de destinatario (solo en modo mensaje) -->
-        <div class="form-group" id="compose-recipient-group">
-          <label class="form-label">Destinatario <span style="color:var(--danger)">*</span></label>
-          <select class="form-input" id="compose-to">
-            <option value="">Cargando profesores...</option>
-          </select>
+        <div id="compose-recipient-group">
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Destinatario <span class="text-red-400">*</span></label>
+          <div class="relative">
+            <select id="compose-to" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 appearance-none bg-transparent relative z-10 cursor-pointer">
+              <option value="" class="bg-gray-900">Cargando profesores...</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-gray-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Asunto</label>
-          <input class="form-input" type="text" id="compose-subject"
-            placeholder="Ej: Duda sobre el examen del m&#xF3;dulo 3" />
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Asunto</label>
+          <input type="text" id="compose-subject" placeholder="Ej: Duda sobre el examen" class="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-brand-400" />
         </div>
-        <div class="form-group">
-          <label class="form-label">Mensaje <span style="color:var(--danger)">*</span></label>
-          <textarea class="form-input" id="compose-body" rows="5" style="resize:vertical;"
-            placeholder="Escribe tu mensaje aqu&#xED;..."></textarea>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Mensaje <span class="text-red-400">*</span></label>
+          <textarea id="compose-body" rows="5" placeholder="Escribe tu mensaje aquí..." class="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:ring-2 focus:ring-brand-400 custom-scrollbar"></textarea>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="closeModal('modal-compose')">Cancelar</button>
-        <button class="btn btn-primary" onclick="sendMessage()">&#x1F4E8; Enviar</button>
+      <div class="p-6 border-t border-white/10 flex justify-end gap-3 bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2.5 rounded-xl text-gray-400 hover:bg-white/5 transition-colors font-medium" onclick="closeModal('modal-compose')">Cancelar</button>
+        <button class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-400 hover:from-brand-500 hover:to-brand-400 text-white font-bold shadow-lg shadow-brand-400/20 transition-all flex items-center gap-2" onclick="sendMessage()">
+          <i data-lucide="send" class="w-4 h-4"></i> Enviar
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ======================== MODAL: VER MENSAJE ======================== -->
-  <div class="modal-overlay hidden" id="modal-msg-detail">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <span class="modal-title" id="msg-detail-subject">Mensaje</span>
-        <button class="modal-close" onclick="closeModal('modal-msg-detail')">&#x2715;</button>
+  <div class="modal-overlay hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-msg-detail">
+    <div class="glass-card w-full max-w-lg rounded-3xl border border-white/10 flex flex-col max-h-[80vh] shadow-2xl shadow-brand-500/10" data-aos="zoom-in" data-aos-duration="200">
+      <div class="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-r from-brand-500/10 to-transparent rounded-t-3xl relative">
+        <h3 class="text-xl font-outfit font-bold text-white flex items-center gap-2 text-wrap pr-10" id="msg-detail-subject"><i data-lucide="mail" class="w-5 h-5 text-brand-400 shrink-0"></i> Mensaje</h3>
+        <button class="absolute top-6 right-6 p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-msg-detail')"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="modal-body">
-        <div id="msg-detail-meta" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.8rem;"></div>
-        <div id="msg-detail-body" style="line-height:1.7;white-space:pre-wrap;"></div>
+      <div class="p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        <div id="msg-detail-meta" class="text-sm font-medium text-brand-300 pb-4 border-b border-white/5 flex flex-col gap-1"></div>
+        <div id="msg-detail-body" class="text-gray-200 leading-relaxed whitespace-pre-wrap font-medium"></div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" onclick="closeModal('modal-msg-detail')">Cerrar</button>
+      <div class="p-6 border-t border-white/10 text-center bg-black/20 rounded-b-3xl">
+        <button class="px-8 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white font-bold transition-all w-full sm:w-auto" onclick="closeModal('modal-msg-detail')">Cerrar</button>
       </div>
     </div>
   </div>
 
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=11"></script>
 </body>
 
 </html>

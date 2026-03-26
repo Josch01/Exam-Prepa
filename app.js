@@ -40,6 +40,8 @@ function formatLatexText(text) {
   safe = safe.replace(/\$[^\$]+?\$/g, m => { mathBlocks.push(m); return `\x00MATH${mathBlocks.length - 1}\x00`; });
   // \(...\) (inline math con paréntesis)
   safe = safe.replace(/\\\([\s\S]+?\\\)/g, m => { mathBlocks.push(m); return `\x00MATH${mathBlocks.length - 1}\x00`; });
+  // \begin{equation} y \begin{equation*}
+  safe = safe.replace(/\\begin\{equation\*?\}[\s\S]+?\\end\{equation\*?\}/g, m => { mathBlocks.push(m); return `\x00MATH${mathBlocks.length - 1}\x00`; });
 
   // ── PASO 2: Procesar texto NO-matemático de forma segura ──
   // Escapar HTML básico para seguridad (XSS)
@@ -56,6 +58,11 @@ function formatLatexText(text) {
 
   // \\ (doble barra = salto de línea LaTeX) o \n real → <br>
   safe = safe.replace(/\\\\/g, '<br>').replace(/\n/g, '<br>');
+
+  // ── PASO 2.5: Soporte experimental para listas LaTeX (enumerate/item) ──
+  safe = safe.replace(/\\begin\{enumerate\}(?:\[.*?\])?/g, '<ol class="list-decimal ml-6 mb-4 space-y-1">');
+  safe = safe.replace(/\\end\{enumerate\}/g, '</ol>');
+  safe = safe.replace(/\\item\s+/g, '<li>');
 
   // ── PASO 3: Restaurar bloques de matemáticas intactos ──
   safe = safe.replace(/\x00MATH(\d+)\x00/g, (m, idx) => mathBlocks[parseInt(idx)]);
@@ -420,9 +427,20 @@ async function api(method, endpoint, body) {
 
 // ===== ROUTER =====
 function showView(id) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.remove('active');
+    v.classList.add('hidden');
+  });
   const el = document.getElementById('view-' + id);
-  if (el) el.classList.add('active');
+  if (el) {
+    el.classList.remove('hidden');
+    el.classList.add('active');
+  }
+}
+
+function goView(id) {
+  if (id.startsWith('view-')) id = id.replace('view-', '');
+  showView(id);
 }
 
 // ===== AUTH =====
@@ -537,10 +555,10 @@ async function renderStudent() {
   document.getElementById('student-avatar-big').textContent = initials(u.name);
   document.getElementById('student-display-name').textContent = u.name;
   document.getElementById('student-display-email').textContent = u.email;
-  document.getElementById('student-display-section').textContent = u.section ? '📌 ' + u.section : 'Sin sección asignada';
+  document.getElementById('student-display-section').innerHTML = u.section ? '<i data-lucide="map-pin" class="w-3.5 h-3.5 text-brand-400 inline mr-1"></i> ' + u.section : 'Sin sección asignada';
 
   const grid = document.getElementById('exams-grid');
-  grid.innerHTML = '<div class="no-exams"><div class="no-exams-icon">⏳</div><p>Cargando exámenes...</p></div>';
+  grid.innerHTML = '<div class="no-exams"><div class="no-exams-icon animate-spin"><i data-lucide="loader-2" class="w-12 h-12"></i></div><p>Cargando exámenes...</p></div>';
 
   // Cargar material y anuncios en paralelo (no bloqueante)
   renderStudyMaterial();
@@ -554,7 +572,7 @@ async function renderStudent() {
     ]);
 
     if (exams.length === 0) {
-      grid.innerHTML = '<div class="no-exams"><div class="no-exams-icon">📭</div><p>No hay exámenes disponibles aún.</p></div>';
+      grid.innerHTML = '<div class="no-exams"><div class="no-exams-icon"><i data-lucide="inbox" class="w-12 h-12"></i></div><p>No hay exámenes disponibles aún.</p></div>';
       return;
     }
 
@@ -578,10 +596,45 @@ async function renderStudent() {
         ? renderSingleExamCard(g[0], logs)
         : renderExamGroupCard(title, g, logs, gIdx);
     });
-    grid.innerHTML = html || '<div class="no-exams"><div class="no-exams-icon"><i data-lucide="package-open" class="icon-xl"></i></div><p>No hay exámenes disponibles aún.</p></div>';
+    grid.innerHTML = html;
+    if (window.updateIcons) window.updateIcons();
+    updateGlobalScore(logs);
+    if (window.lucide) window.lucide.createIcons();
   } catch (e) {
     grid.innerHTML = `<div class="no-exams"><div class="no-exams-icon"><i data-lucide="alert-triangle" class="icon-xl"></i></div><p>${e.message}</p></div>`;
   }
+}
+
+/** Calcula el puntaje global del alumno y actualiza la tarjeta de gamification */
+function updateGlobalScore(logs) {
+  const el   = document.getElementById('student-global-score');
+  const bar  = document.getElementById('student-global-progress');
+  const txt  = document.getElementById('student-global-level-text');
+  if (!el || !bar || !txt) return;
+
+  // Suma de pct de cada MEJOR intento por examen
+  const best = {};
+  (logs || []).forEach(l => {
+    if (best[l.exam_id] === undefined || l.pct > best[l.exam_id]) best[l.exam_id] = l.pct;
+  });
+  const total = Object.values(best).reduce((sum, p) => sum + p, 0);
+
+  // Niveles: Bronce 0-299, Plata 300-599, Oro 600-999, Diamante 1000+
+  const levels = [
+    { name: 'Nivel Bronce <i data-lucide="medal" class="w-4 h-4 inline text-yellow-700"></i>', min: 0,    max: 300,  color: 'from-yellow-700 to-yellow-500' },
+    { name: 'Nivel Plata <i data-lucide="medal" class="w-4 h-4 inline text-gray-400"></i>',  min: 300,  max: 600,  color: 'from-gray-300 to-gray-500' },
+    { name: 'Nivel Oro <i data-lucide="award" class="w-4 h-4 inline text-yellow-500"></i>',   min: 600,  max: 1000, color: 'from-yellow-300 to-yellow-600' },
+    { name: 'Diamante <i data-lucide="gem" class="w-4 h-4 inline text-sky-400"></i>',    min: 1000, max: 2000, color: 'from-sky-300 to-blue-500' },
+  ];
+  const lvl = levels.findLast(l => total >= l.min) || levels[0];
+  const pct = Math.min(100, Math.round(((total - lvl.min) / (lvl.max - lvl.min)) * 100));
+  const remaining = Math.max(0, lvl.max - total);
+
+  el.textContent = total.toLocaleString('es-MX');
+  // Update gradient class
+  el.className = el.className.replace(/from-\S+ to-\S+/, lvl.color);
+  bar.style.width = pct + '%';
+  txt.innerHTML = remaining > 0 ? `¡A ${remaining} pts del siguiente nivel!` : `¡<i data-lucide="party-popper" class="w-4 h-4 inline text-brand-400"></i> Máximo nivel alcanzado!`;
 }
 
 function lockedMsg() {
@@ -589,10 +642,11 @@ function lockedMsg() {
 }
 
 function scoreTag(pct) {
-  if (pct === 100) return `<span class="exam-score-badge score-perfect"><i data-lucide="star" class="icon-sm"></i> 100%</span>`;
-  if (pct >= 70) return `<span class="exam-score-badge score-high"><i data-lucide="check-circle" class="icon-sm"></i> ${pct}%</span>`;
-  if (pct >= 40) return `<span class="exam-score-badge score-mid"><i data-lucide="alert-triangle" class="icon-sm"></i> ${pct}%</span>`;
-  return `<span class="exam-score-badge score-low"><i data-lucide="x-circle" class="icon-sm"></i> ${pct}%</span>`;
+  const base = "px-2.5 py-1 rounded-lg text-[10px] font-black tracking-wider uppercase border flex items-center gap-1.5 shadow-sm whitespace-nowrap";
+  if (pct === 100) return `<span class="${base} bg-gradient-to-r from-blue-500/30 to-blue-600/20 text-blue-300 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]"><i data-lucide="star" class="w-3.5 h-3.5 fill-blue-400"></i> 100%</span>`;
+  if (pct >= 70) return `<span class="${base} bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-300 border-emerald-500/20"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> ${pct}%</span>`;
+  if (pct >= 40) return `<span class="${base} bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 text-yellow-300 border-yellow-500/20"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> ${pct}%</span>`;
+  return `<span class="${base} bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-300 border-red-500/20"><i data-lucide="x-circle" class="w-3.5 h-3.5"></i> ${pct}%</span>`;
 }
 
 // ===== HELPERS DE AGRUPACIÓN =====
@@ -607,16 +661,75 @@ function extractUnit(description) {
 function renderSingleExamCard(exam, logs) {
   const myLogs = logs.filter(l => l.exam_id === exam.id);
   const lastLog = myLogs.length ? myLogs[0] : null;
-  const scoreHtml = lastLog ? scoreTag(lastLog.pct) : '<span class="exam-score-badge score-none">Sin intentos</span>';
+  const pct = lastLog ? lastLog.pct : null;
+  const isNew = pct === null;
+
+  // Badge de estado
+  let badge = '';
+  if (!exam.allowed) {
+    badge = `<span class="px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+               <i data-lucide="lock" class="w-3 h-3"></i> Bloqueado
+             </span>`;
+  } else if (isNew) {
+    badge = `<span class="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Nuevo
+             </span>`;
+  } else if (pct >= 100) {
+    badge = `<span class="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+               <i data-lucide="star" class="w-3 h-3 fill-blue-400"></i> ${pct}%
+             </span>`;
+  } else if (pct >= 70) {
+    badge = `<span class="px-2.5 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs font-bold uppercase tracking-wider">
+               Reintentar · ${pct}%
+             </span>`;
+  } else {
+    badge = `<span class="px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold uppercase tracking-wider">
+               Mejorar · ${pct}%
+             </span>`;
+  }
+
+  const examIcon = (exam.icon && exam.icon.length < 4) ? `<i data-lucide="file-text" class="w-6 h-6 text-brand-300"></i>` : (exam.icon || `<i data-lucide="file-text" class="w-6 h-6 text-brand-300"></i>`);
+  const iconBg = !exam.allowed ? 'bg-gray-500/20 border-gray-500/20' : 'bg-brand-400/20 border-brand-500/20';
+  const actionIcon = exam.allowed
+    ? (isNew ? 'arrow-right' : 'refresh-cw')
+    : 'lock';
+  const hoverBorderColor = !exam.allowed ? 'hover:border-red-400/30' : (pct !== null ? 'hover:border-accent-pink/50' : 'hover:border-brand-400/50');
+  const hoverGlow = !exam.allowed ? '' : (pct !== null ? 'from-accent-pink/5' : 'from-brand-400/5');
+
+  const progressRow = pct !== null && exam.allowed ? `
+    <div class="flex flex-col gap-1 w-full mr-4">
+      <div class="flex justify-between text-xs font-medium text-gray-400">
+        <span>Último intento</span>
+        <span class="text-white">${pct}%</span>
+      </div>
+      <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+        <div class="bg-gradient-to-r from-accent-pink to-brand-400 h-1.5 rounded-full" style="width: ${pct}%"></div>
+      </div>
+    </div>` : `
+    <div class="flex items-center gap-3 text-xs text-gray-400">
+      ${exam.time_limit > 0 ? `<span class="flex items-center gap-1"><i data-lucide="clock" class="w-3.5 h-3.5"></i> ${exam.time_limit}&nbsp;min</span>` : ''}
+      <span class="flex items-center gap-1"><i data-lucide="help-circle" class="w-3.5 h-3.5"></i> ${exam.questions.length}&nbsp;Preg.</span>
+    </div>`;
+
   return `
-    <div class="exam-card ${!exam.allowed ? 'exam-locked' : ''}" onclick="${exam.allowed ? `startExam('${exam.id}')` : 'lockedMsg()'}">
-      ${!exam.allowed ? '<span class="locked-badge"><i data-lucide="lock" class="icon-sm"></i> Bloqueado</span>' : ''}
-      <div class="exam-card-icon">${exam.icon === '📋' ? '<i data-lucide="file-text" class="icon-md"></i>' : exam.icon}</div>
-      <h3>${exam.title}</h3>
-      <p>${exam.description || ''}</p>
-      <div class="exam-card-footer">
-        ${scoreHtml}
-        <span style="font-size:0.8rem;color:var(--text-muted);">${exam.questions.length} preguntas</span>
+    <div class="group relative glass-card rounded-3xl p-6 border border-white/10 ${hoverBorderColor} transition-all duration-300 ${exam.allowed ? 'hover:-translate-y-2 cursor-pointer' : 'opacity-80 grayscale-[0.3] cursor-not-allowed'} isolate" onclick="${exam.allowed ? `startExam('${exam.id}')` : 'lockedMsg()'}">
+      <div class="absolute inset-0 bg-gradient-to-br ${hoverGlow} to-transparent opacity-0 ${exam.allowed ? 'group-hover:opacity-100' : ''} transition-opacity rounded-3xl -z-10"></div>
+
+      <div class="flex justify-between items-start mb-4">
+        <div class="w-12 h-12 rounded-2xl ${iconBg} text-brand-400 flex items-center justify-center border transition-transform group-hover:scale-110">
+          ${examIcon}
+        </div>
+        ${badge}
+      </div>
+      
+      <h3 class="font-outfit text-xl font-bold text-white mb-2 group-hover:text-brand-300 transition-colors">${exam.title}</h3>
+      <p class="text-gray-400 text-sm mb-6 line-clamp-2">${exam.description || ''}</p>
+      
+      <div class="flex items-center justify-between pt-4 border-t border-white/5">
+        ${progressRow}
+        <div class="w-8 h-8 flex-shrink-0 rounded-full bg-white/5 ${exam.allowed ? 'group-hover:bg-brand-400' : ''} flex items-center justify-center transition-colors">
+          <i data-lucide="${actionIcon}" class="w-4 h-4 text-white"></i>
+        </div>
       </div>
     </div>`;
 }
@@ -630,31 +743,37 @@ function renderExamGroupCard(title, exams, logs, gIdx) {
     const unit = extractUnit(exam.description) || exam.description || '';
     const myLogs = logs.filter(l => l.exam_id === exam.id);
     const lastLog = myLogs.length ? myLogs[0] : null;
-    const scoreHtml = lastLog ? scoreTag(lastLog.pct) : '<span class="exam-score-badge score-none">Sin intentos</span>';
+    const scoreHtml = lastLog ? scoreTag(lastLog.pct) : '<span class="px-2 py-1 rounded-lg text-[9px] font-bold tracking-wider uppercase bg-white/5 text-gray-500 border border-white/5">Sin intentar</span>';
     return `
-      <div class="exam-unit-row ${!exam.allowed ? 'exam-locked' : ''}" onclick="${exam.allowed ? `startExam('${exam.id}')` : 'lockedMsg()'}">
-        <div class="exam-unit-left">
-          <span class="exam-unit-icon">${!exam.allowed ? '<i data-lucide="lock" class="icon-sm"></i>' : '<i data-lucide="file-text" class="icon-sm"></i>'}</span>
-          <div>
-            <div class="exam-unit-name">${unit}</div>
-            ${!exam.allowed ? '<div class="exam-unit-status">Bloqueado</div>' : `<div class="exam-unit-questions">${exam.questions.length} preguntas</div>`}
+      <div class="flex items-center justify-between p-3 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors cursor-pointer group/unit rounded-xl ${!exam.allowed ? 'opacity-60' : ''}" onclick="${exam.allowed ? `startExam('${exam.id}')` : 'lockedMsg()'}">
+        <div class="flex items-center gap-3 overflow-hidden">
+          <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 border border-white/10 group-hover/unit:bg-white/10 transition-colors">
+            ${!exam.allowed ? '<i data-lucide="lock" class="w-3.5 h-3.5 text-gray-500"></i>' : '<i data-lucide="file-text" class="w-3.5 h-3.5 text-brand-400"></i>'}
+          </div>
+          <div class="flex flex-col truncate">
+            <span class="text-sm font-bold text-gray-200 group-hover/unit:text-white transition-colors truncate">${unit}</span>
+            ${!exam.allowed ? '<span class="text-[0.7rem] text-red-400/80 font-medium">Bloqueado</span>' : `<span class="text-[0.7rem] text-gray-500">${exam.questions.length} preguntas</span>`}
           </div>
         </div>
-        <div class="exam-unit-right">${scoreHtml}</div>
+        <div class="shrink-0 pl-2 ml-auto">${scoreHtml}</div>
       </div>`;
   }).join('');
 
   return `
-    <div class="exam-group-card">
-      <div class="exam-group-header" onclick="toggleExamGroup(${gIdx})">
-        <div class="exam-card-icon" style="margin-bottom:0;flex-shrink:0;">${icon === '📚' ? '<i data-lucide="book-open" class="icon-md"></i>' : icon}</div>
-        <div class="exam-group-info">
-          <h3>${title}</h3>
-          <p>${exams.length} unidades · ${anyAllowed ? 'Alguna disponible' : 'Todas bloqueadas'}</p>
+    <div class="glass-card rounded-3xl flex flex-col relative overflow-hidden transition-all duration-300 border border-white/5">
+      <div class="p-5 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-colors z-10" onclick="toggleExamGroup(${gIdx})">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500/30 to-brand-400/10 flex items-center justify-center text-2xl shadow-inner border border-brand-500/20 shrink-0">
+          <i data-lucide="book-open" class="w-6 h-6 text-brand-300"></i>
         </div>
-        <span class="exam-group-arrow" id="group-arrow-${gIdx}"><i data-lucide="chevron-down" class="icon-sm"></i></span>
+        <div class="flex flex-col flex-1">
+          <h3 class="text-lg font-black text-white leading-tight font-outfit mt-0.5">${title}</h3>
+          <p class="text-[0.8rem] text-gray-400 font-medium mt-0.5">${exams.length} unidades <span class="mx-1">•</span> ${anyAllowed ? '<span class="text-brand-400">Disponible</span>' : '<span class="text-red-400">Bloqueado</span>'}</p>
+        </div>
+        <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 border border-white/10 text-gray-400 transition-transform duration-300" id="group-arrow-${gIdx}">
+          <i data-lucide="chevron-down" class="w-4 h-4"></i>
+        </div>
       </div>
-      <div class="exam-group-body hidden" id="group-body-${gIdx}">
+      <div class="hidden flex-col gap-1 px-3 pb-3 pt-1 border-t border-white/5 bg-black/20" id="group-body-${gIdx}">
         ${unitRows}
       </div>
     </div>`;
@@ -754,7 +873,7 @@ function updateTimerDisplay() {
   const min = Math.floor(examTimeRemaining / 60);
   const sec = examTimeRemaining % 60;
   const timerEl = document.getElementById('exam-timer');
-  timerEl.textContent = `⏱️ ${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  timerEl.innerHTML = `<i data-lucide="clock" class="w-4 h-4 inline mr-1"></i> ${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   // Alerta visual cuando queda poco tiempo (≤60 segundos)
   if (examTimeRemaining <= 60) {
     timerEl.classList.add('timer-danger');
@@ -792,9 +911,11 @@ function renderQuestion() {
 
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
   document.getElementById('options-list').innerHTML = q.options.map((opt, i) => `
-    <button class="option-btn" id="opt-${i}" onclick="selectOption(${i})">
-      <span class="option-letter">${letters[i]}</span>
-      <span>${formatLatexText(opt)}</span>
+    <button class="option-btn w-full text-left p-4 rounded-2xl glass-panel relative overflow-hidden transition-all group hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand-500/50 border border-white/5 flex items-center gap-4 cursor-pointer" id="opt-${i}" onclick="selectOption(${i})">
+      <div class="w-10 h-10 rounded-xl bg-white/5 text-gray-400 flex items-center justify-center font-black text-lg border border-white/10 group-hover:bg-white/10 transition-colors shrink-0 shadow-inner option-letter-box">
+        ${letters[i]}
+      </div>
+      <div class="text-[0.95rem] text-gray-300 group-hover:text-white transition-colors flex-1 option-text-box latex-container pointer-events-none">${formatLatexText(opt)}</div>
     </button>`).join('');
 
   // Renderizar matemáticas de forma automática (KaTeX)
@@ -872,14 +993,14 @@ function confirmAnswer() {
   const correctText = q.options[q.correct];
   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
   const justHTML = q.justification
-    ? `<div class="feedback-justification">💡 <strong>Justificación:</strong> ${lqProcessText(q.justification)}</div>`
+    ? `<div class="feedback-justification"><i data-lucide="lightbulb" class="w-4 h-4 inline text-yellow-500 mr-1"></i> <strong>Justificación:</strong> ${lqProcessText(q.justification)}</div>`
     : '';
 
   if (isOk) {
-    fb.innerHTML = `<span class="feedback-icon">✅</span><div><span>¡Correcto! Bien hecho.</span>${justHTML}</div>`;
+    fb.innerHTML = `<span class="feedback-icon"><i data-lucide="check-circle" class="w-8 h-8 text-emerald-400"></i></span><div><span>¡Correcto! Bien hecho.</span>${justHTML}</div>`;
   } else {
     fb.innerHTML = `
-      <span class="feedback-icon">❌</span>
+      <span class="feedback-icon"><i data-lucide="x-circle" class="w-8 h-8 text-red-400"></i></span>
       <div>
         <span>Incorrecto. La respuesta correcta era: <strong>${letters[q.correct]}. ${correctText}</strong></span>
         ${justHTML}
@@ -970,19 +1091,19 @@ async function showResults() {
   let color, cssClass, emoji, title, subtitle;
   if (pct === 100) {
     color = 'var(--secondary)'; cssClass = 'results-excellent';
-    emoji = '🏆'; title = '¡Perfecto!'; subtitle = 'Obtuviste el máximo puntaje. ¡Excelente trabajo!';
+    emoji = '<i data-lucide="trophy" class="w-16 h-16 text-yellow-500"></i>'; title = '¡Perfecto!'; subtitle = 'Obtuviste el máximo puntaje. ¡Excelente trabajo!';
   } else if (pct >= 70) {
     color = '#7be0c5'; cssClass = 'results-excellent';
-    emoji = '🎉'; title = '¡Bien hecho!'; subtitle = 'Superaste el 70%. ¡Sigue así!';
+    emoji = '<i data-lucide="party-popper" class="w-16 h-16 text-emerald-400"></i>'; title = '¡Bien hecho!'; subtitle = 'Superaste el 70%. ¡Sigue así!';
   } else if (pct >= 40) {
     color = 'var(--warning)'; cssClass = 'results-good';
-    emoji = '😅'; title = 'Puedes mejorar'; subtitle = 'Estás en camino. ¡Repasa y vuelve a intentarlo!';
+    emoji = '<i data-lucide="meh" class="w-16 h-16 text-yellow-400"></i>'; title = 'Puedes mejorar'; subtitle = 'Estás en camino. ¡Repasa y vuelve a intentarlo!';
   } else {
     color = 'var(--danger)'; cssClass = 'results-bad';
-    emoji = '😓'; title = 'Sigue practicando'; subtitle = 'No te desanimes. Repasa el material e inténtalo de nuevo.';
+    emoji = '<i data-lucide="book-open" class="w-16 h-16 text-red-400"></i>'; title = 'Sigue practicando'; subtitle = 'No te desanimes. Repasa el material e inténtalo de nuevo.';
   }
 
-  document.getElementById('results-emoji').textContent = emoji;
+  document.getElementById('results-emoji').innerHTML = emoji;
   document.getElementById('results-title').textContent = title;
   document.getElementById('results-subtitle').textContent = subtitle;
   document.getElementById('result-pct').textContent = pct + '%';
@@ -1011,13 +1132,13 @@ async function renderAdmin() {
   if (currentUser) {
     const isSuperAdmin = currentUser.role === 'superadmin';
     const roleLabel = isSuperAdmin ? 'Superadmin' : 'Profesor / Admin';
-    const avatar = isSuperAdmin ? '👑' : '📚';
+    const avatarIcon = isSuperAdmin ? '<i data-lucide="crown" class="w-5 h-5"></i>' : '<i data-lucide="book-open" class="w-5 h-5"></i>';
     const el = document.getElementById('admin-role-label');
     const nm = document.getElementById('admin-name-label');
     const av = document.getElementById('admin-avatar');
     if (el) el.textContent = roleLabel;
     if (nm) nm.textContent = currentUser.name || currentUser.email;
-    if (av) av.textContent = avatar;
+    if (av) av.innerHTML = avatarIcon;
   }
 
   try {
@@ -1029,10 +1150,16 @@ async function renderAdmin() {
     cachedStudents = students;
     cachedExams = exams;
     renderAdminStats(students, exams, logs);
-    renderStudentsTable(students, exams);
+    populateSectionFilter(students);
+    applyStudentFilters();
     renderExamsTable(exams);
     renderRecentActivity(logs, students, exams);
-    populateSectionFilter(students);
+    renderAnalytics();
+    
+    // Inicializar selectores personalizados
+    initCustomSelect('analytics-exam-filter');
+    initCustomSelect('filter-section');
+    initCustomSelect('filter-role');
   } catch (e) {
     toast('Error cargando datos: ' + e.message, 'error');
   }
@@ -1040,28 +1167,190 @@ async function renderAdmin() {
 }
 
 function showPanel(name) {
-  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
+  document.querySelectorAll('.admin-panel').forEach(p => {
+    p.classList.remove('active');
+    p.classList.add('hidden');
+  });
+  const panel = document.getElementById('panel-' + name);
+  if (panel) {
+    panel.classList.add('active');
+    panel.classList.remove('hidden');
+  }
+  
   document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
-  document.getElementById('nav-' + name).classList.add('active');
+  const navItem = document.getElementById('nav-' + name);
+  if (navItem) navItem.classList.add('active');
+  
   // Cargar datos del panel activo
   if (name === 'material') renderMaterialPanel();
   if (name === 'announcements') renderAnnouncementsPanel();
-  if (name === 'analytics') renderAnalytics();
+  if (name === 'overview') renderAnalytics();
   if (name === 'live') initLivePanel();
+}
+
+function toggleDropdown(id) {
+  const dropdown = document.getElementById(id);
+  const icon = document.getElementById('icon-' + id);
+  if (!dropdown) return;
+  
+  document.querySelectorAll('[id^="drop-"]').forEach(el => {
+    if (el.id !== id && !el.classList.contains('hidden')) {
+      el.classList.add('hidden');
+      const otherIcon = document.getElementById('icon-' + el.id);
+      if (otherIcon) otherIcon.classList.remove('rotate-180');
+    }
+  });
+
+  dropdown.classList.toggle('hidden');
+  if (icon) icon.classList.toggle('rotate-180');
+}
+
+// Close dropdowns if clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.group')) {
+    document.querySelectorAll('[id^="drop-"]').forEach(el => {
+      if (!el.classList.contains('hidden')) {
+        el.classList.add('hidden');
+        const icon = document.getElementById('icon-' + el.id);
+        if (icon) icon.classList.remove('rotate-180');
+      }
+    });
+  }
+});
+
+// ============================================================
+//  CUSTOM SELECT COMPONENT (UI Modernization)
+// ============================================================
+function initCustomSelect(selectId) {
+  const select = document.getElementById(selectId);
+  const container = document.getElementById('container-' + selectId);
+  if (!select || !container) return;
+  
+  // Trigger
+  let trigger = document.getElementById(selectId + '-trigger');
+  if (!trigger) {
+    trigger = document.createElement('div');
+    trigger.className = 'custom-select-trigger w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm';
+    trigger.id = selectId + '-trigger';
+    container.appendChild(trigger);
+  }
+  
+  trigger.innerHTML = `<span id="${selectId}-label" class="pointer-events-none text-xs sm:text-sm truncate mr-2">${select.options[select.selectedIndex]?.text || ''}</span> <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 transition-transform shrink-0" id="${selectId}-arrow"></i>`;
+  
+  // Options list
+  let optionsDiv = document.getElementById(selectId + '-options');
+  if (!optionsDiv) {
+    optionsDiv = document.createElement('div');
+    optionsDiv.className = 'custom-select-options glass-card rounded-xl border border-white/10 overflow-hidden shadow-2xl';
+    optionsDiv.id = selectId + '-options';
+    container.appendChild(optionsDiv);
+  }
+  
+  // Sync function
+  window['sync' + selectId.replace(/-/g, '')] = () => {
+    const s = document.getElementById(selectId);
+    const opts = document.getElementById(selectId + '-options');
+    const lbl = document.getElementById(selectId + '-label');
+    if (!s || !opts || !lbl) return;
+    
+    opts.innerHTML = Array.from(s.options).map((opt, i) => `
+      <div class="custom-select-option text-xs sm:text-sm ${s.selectedIndex === i ? 'selected' : ''}" onclick="pickCustomOption('${selectId}', ${i})">
+        ${opt.text}
+      </div>
+    `).join('');
+    lbl.textContent = s.options[s.selectedIndex]?.text || '';
+    if (window.lucide) window.lucide.createIcons();
+  };
+  
+  // Toggle
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    const isActive = optionsDiv.classList.contains('active');
+    
+    // Close other dropdowns
+    document.querySelectorAll('.custom-select-options').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.custom-select-trigger i').forEach(el => el.classList.remove('rotate-180'));
+    document.querySelectorAll('.custom-select-container').forEach(el => el.style.zIndex = '40');
+    
+    if (!isActive) {
+      optionsDiv.classList.add('active');
+      container.style.zIndex = '100'; // Bring to front
+      if (trigger.querySelector('i')) trigger.querySelector('i').classList.add('rotate-180');
+    }
+  };
+  
+  window['sync' + selectId.replace(/-/g, '')]();
+}
+
+function pickCustomOption(selectId, index) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  select.selectedIndex = index;
+  select.dispatchEvent(new Event('change'));
+  const opts = document.getElementById(selectId + '-options');
+  if (opts) opts.classList.remove('active');
+  const arrow = document.getElementById(selectId + '-arrow');
+  if (arrow) arrow.classList.remove('rotate-180');
+  
+  const container = document.getElementById('container-' + selectId);
+  if (container) container.style.zIndex = '40';
+
+  const syncFn = window['sync' + selectId.replace(/-/g, '')];
+  if (syncFn) syncFn();
+}
+
+// Close custom selects on outside click
+document.addEventListener('click', () => {
+  document.querySelectorAll('.custom-select-options').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.custom-select-trigger i').forEach(el => el.classList.remove('rotate-180'));
+  document.querySelectorAll('.custom-select-container').forEach(el => el.style.zIndex = '40');
+});
+
+function toggleSidebarGroup(groupId) {
+  // Mantenido vacío por compatibilidad si es llamado desde html antiguo
 }
 
 function renderAdminStats(students, exams, logs) {
   const studentCount = students.filter(u => u.role === 'student').length;
-  const adminCount = students.filter(u => u.role === 'admin').length;
   const avgPct = logs.length ? Math.round(logs.reduce((a, l) => a + l.pct, 0) / logs.length) : 0;
+  const examsCount = exams.length;
 
   document.getElementById('admin-stats').innerHTML = `
-    <div class="stat-card"><span class="stat-icon">👥</span><div class="stat-info"><div class="stat-num">${studentCount}</div><div class="stat-name">Alumnos</div></div></div>
-    <div class="stat-card"><span class="stat-icon">👨‍🏫</span><div class="stat-info"><div class="stat-num">${adminCount}</div><div class="stat-name">Profesores</div></div></div>
-    <div class="stat-card"><span class="stat-icon">📝</span><div class="stat-info"><div class="stat-num">${exams.length}</div><div class="stat-name">Exámenes</div></div></div>
-    <div class="stat-card"><span class="stat-icon">🏁</span><div class="stat-info"><div class="stat-num">${logs.length}</div><div class="stat-name">Intentos</div></div></div>
-    <div class="stat-card"><span class="stat-icon">📈</span><div class="stat-info"><div class="stat-num">${avgPct}%</div><div class="stat-name">Promedio general</div></div></div>`;
+    <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-white/10 transition-all hover:-translate-y-1">
+      <div class="flex justify-between items-start mb-4">
+        <div class="p-3 rounded-xl bg-blue-500/20 text-blue-400">
+          <i data-lucide="users" class="w-6 h-6"></i>
+        </div>
+        <span class="flex items-center text-xs font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-lg">
+          <i data-lucide="trending-up" class="w-3 h-3 mr-1"></i> +12%
+        </span>
+      </div>
+      <div class="text-gray-400 text-sm font-medium mb-1">Total Alumnos</div>
+      <div class="text-4xl font-outfit font-bold">${studentCount}</div>
+    </div>
+
+    <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-white/10 transition-all hover:-translate-y-1">
+      <div class="flex justify-between items-start mb-4">
+        <div class="p-3 rounded-xl bg-emerald-500/20 text-emerald-400">
+          <i data-lucide="check-circle" class="w-6 h-6"></i>
+        </div>
+      </div>
+      <div class="text-gray-400 text-sm font-medium mb-1">Promedio General</div>
+      <div class="text-4xl font-outfit font-bold">${avgPct}<span class="text-xl text-gray-500">%</span></div>
+    </div>
+
+    <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-white/10 transition-all hover:-translate-y-1">
+      <div class="flex justify-between items-start mb-4">
+        <div class="p-3 rounded-xl bg-purple-500/20 text-purple-400">
+          <i data-lucide="file-text" class="w-6 h-6"></i>
+        </div>
+        <div class="px-2 py-1 text-xs font-bold bg-white/10 rounded-lg text-white tracking-widest uppercase">Activos</div>
+      </div>
+      <div class="text-gray-400 text-sm font-medium mb-1">Exámenes Creados</div>
+      <div class="text-4xl font-outfit font-bold">${examsCount}</div>
+    </div>
+  `;
+  setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
 }
 
 // ===== FILTROS =====
@@ -1070,6 +1359,8 @@ function populateSectionFilter(students) {
   const sel = document.getElementById('filter-section');
   sel.innerHTML = '<option value="">Todas las secciones</option>' +
     sections.map(s => `<option value="${s}">${s}</option>`).join('');
+  
+  if (window.syncfiltersection) window.syncfiltersection();
 }
 
 function applyStudentFilters() {
@@ -1096,10 +1387,13 @@ function renderStudentsTable(students, exams) {
     return;
   }
 
+  // Ordenar alumnos por nombre
+  students.sort((a, b) => naturalSort(a.name || '', b.name || ''));
+
   tbody.innerHTML = students.map(s => {
     const roleBadge = s.role === 'admin'
-      ? '<span class="role-badge role-admin">👨‍🏫 Profesor</span>'
-      : '<span class="role-badge role-student">👤 Alumno</span>';
+      ? '<span class="px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 text-yellow-300 border border-yellow-500/20 shadow-sm flex items-center gap-1"><i data-lucide="graduation-cap" class="w-3 h-3"></i> Profesor</span>'
+      : '<span class="px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-300 border border-emerald-500/20 shadow-sm flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i> Alumno</span>';
 
     // Agrupar exámenes por módulo (título)
     const moduleMap = {};
@@ -1113,42 +1407,50 @@ function renderStudentsTable(students, exams) {
     const sEmail = s.email;
 
     const permToggles = moduleOrder.length === 0
-      ? '<span style="color:var(--text-muted);font-size:0.8rem;">Sin exámenes</span>'
+      ? '<span class="text-xs text-gray-500 italic">Sin exámenes</span>'
       : moduleOrder.map(title => {
         const group = moduleMap[title];
         const allIds = group.map(e => e.id);
         const allOn = allIds.every(id => allowedSet.has(id));
         const someOn = !allOn && allIds.some(id => allowedSet.has(id));
-        const moduleBtnLabel = allOn ? '🔒 Quitar' : '✅ Todo';
-        const moduleBtnClass = allOn ? 'btn-warning' : 'btn-secondary';
+        const moduleBtnLabel = allOn ? '<i data-lucide="lock" class="w-3 h-3 inline"></i> Quitar' : '<i data-lucide="check" class="w-3 h-3 inline"></i> Todo';
+        const moduleBtnClass = allOn 
+          ? 'px-2 py-1 rounded-lg text-[10px] font-bold transition-all bg-yellow-500/20 hover:bg-yellow-500 text-yellow-500 hover:text-black flex items-center gap-1' 
+          : 'px-2 py-1 rounded-lg text-[10px] font-bold transition-all bg-brand-500/20 hover:bg-brand-500 text-brand-400 hover:text-white flex items-center gap-1';
         const partialBadge = someOn
-          ? `<span style="font-size:0.65rem;color:var(--warning);margin-left:2px;">parcial</span>`
+          ? `<span class="text-[0.65rem] text-yellow-400 ml-1 bg-yellow-400/10 px-1 rounded">parcial</span>`
           : '';
-        return `<div class="perm-module-row">
-          <span class="perm-module-title">${title}${partialBadge}</span>
-          <button class="btn ${moduleBtnClass} btn-xs" onclick="toggleModulePerm('${sEmail}', ${JSON.stringify(allIds)}, ${!allOn})">${moduleBtnLabel}</button>
+        return `<div class="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0 gap-3">
+          <span class="text-xs font-medium text-gray-300 truncate max-w-[120px]" title="${title}">${title}${partialBadge}</span>
+          <button class="${moduleBtnClass}" onclick="toggleModulePerm('${sEmail}', ${JSON.stringify(allIds).replace(/"/g, '&quot;')}, ${!allOn})">${moduleBtnLabel}</button>
         </div>`;
       }).join('');
 
 
     const roleBtn = isSuperAdmin
       ? (s.role === 'admin'
-        ? `<button class="btn btn-warning btn-sm" onclick="changeRole('${s.email}','student')">⬇️ Quitar admin</button>`
-        : `<button class="btn btn-secondary btn-sm" onclick="changeRole('${s.email}','admin')">⬆️ Hacer admin</button>`)
+        ? `<button class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-yellow-500/20 hover:bg-yellow-500 text-yellow-500 hover:text-black flex items-center gap-1.5 shadow-sm" onclick="changeRole('${s.email}','student')"><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i> Quitar admin</button>`
+        : `<button class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-brand-500/20 hover:bg-brand-500 text-brand-400 hover:text-white flex items-center gap-1.5 shadow-sm" onclick="changeRole('${s.email}','admin')"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i> Hacer admin</button>`)
       : '';
 
-    return `<tr>
-      <td><strong>${s.name}</strong><br/><span style="font-size:0.78rem;color:var(--text-muted);">${s.email}</span></td>
-      <td>${roleBadge}</td>
-      <td><span class="section-pill">${s.section || '—'}</span></td>
-      <td><div class="permission-cell">${permToggles}</div></td>
-      <td style="white-space:nowrap;">
-        <button class="btn btn-ghost btn-sm" onclick="openEditStudent('${s.email}')">✏️ Editar</button>
-        ${roleBtn}
-        ${s.role !== 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteStudent('${s.email}')">🗑️</button>` : ''}
+    return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
+      <td class="p-4">
+        <div class="font-bold text-white text-sm mb-0.5">${s.name}</div>
+        <div class="text-[0.7rem] text-gray-400 truncate max-w-[160px]" title="${s.email}">${s.email}</div>
+      </td>
+      <td class="p-4">${roleBadge}</td>
+      <td class="p-4"><span class="px-2 py-1 rounded-md border border-blue-500/20 text-[10px] font-mono font-bold bg-blue-500/10 text-blue-300 whitespace-nowrap uppercase tracking-wider">${s.section || '—'}</span></td>
+      <td class="p-4"><div class="max-h-[120px] overflow-y-auto custom-scrollbar pr-2 min-w-[200px]">${permToggles}</div></td>
+      <td class="p-4 whitespace-nowrap">
+        <div class="flex items-center justify-end gap-2">
+          <button class="px-2 py-1.5 rounded-xl text-xs font-bold transition-all text-gray-400 hover:bg-white/10 hover:text-white flex items-center shadow-sm" onclick="openEditStudent('${s.email}')"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+          ${roleBtn}
+          ${s.role !== 'admin' ? `<button class="px-2 py-1.5 rounded-xl text-xs font-bold transition-all bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white flex items-center shadow-sm" onclick="deleteStudent('${s.email}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+        </div>
       </td>
     </tr>`;
   }).join('');
+  setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
 }
 
 function renderExamsTable(exams) {
@@ -1159,16 +1461,26 @@ function renderExamsTable(exams) {
     return;
   }
 
+  // Ordenar exámenes por título
+  exams.sort((a, b) => naturalSort(a.title || '', b.title || ''));
+
   tbody.innerHTML = exams.map(e => `
-    <tr>
-      <td><strong>${e.icon || '📋'} ${e.title}</strong></td>
-      <td style="color:var(--text-muted)">${e.description || '—'}</td>
-      <td style="text-align:center"><strong>${e.questions.length}</strong></td>
-      <td>
-        <button class="btn btn-ghost btn-sm" onclick="openEditExamModal('${e.id}')">✏️ Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteExam('${e.id}')">🗑️</button>
+    <tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
+      <td class="p-4"><strong class="flex items-center gap-2 text-white text-sm whitespace-nowrap"><span class="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center text-brand-400 border border-brand-500/10"><i data-lucide="${e.icon && e.icon.length < 4 ? 'file-text' : (e.icon || 'file-text')}" class="w-4 h-4"></i></span> ${e.title}</strong></td>
+      <td class="p-4 text-[0.85rem] text-gray-400 max-w-[200px] truncate" title="${e.description || ''}">${e.description || '—'}</td>
+      <td class="p-4 text-center"><span class="text-emerald-300 bg-emerald-500/10 px-2.5 py-1 rounded-lg text-xs font-bold ring-1 ring-emerald-500/20">${e.questions.length}</span></td>
+      <td class="p-4 pr-6">
+        <div class="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+          <button class="px-3 py-2 rounded-xl text-[11px] font-bold transition-all relative overflow-hidden group/btn bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center gap-1.5 shadow-sm" onclick="openEditExamModal('${e.id}')">
+            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i> Editar
+          </button>
+          <button class="px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white flex items-center shadow-sm relative overflow-hidden group/btn2" onclick="deleteExam('${e.id}')">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
       </td>
     </tr>`).join('');
+  setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
 }
 
 function renderRecentActivity(logs, students, exams) {
@@ -1184,15 +1496,27 @@ function renderRecentActivity(logs, students, exams) {
     const user = students.find(u => u.email === l.student_email);
     const exam = exams.find(e => e.id === l.exam_id);
     const date = new Date(l.date).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-    const color = l.pct >= 70 ? 'var(--secondary)' : l.pct >= 40 ? 'var(--warning)' : 'var(--danger)';
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0;border-bottom:1px solid var(--card-border);">
-      <span>👤 <strong>${user ? user.name : l.student_email}</strong> tomó <em>${exam ? exam.title : l.exam_id}</em></span>
-      <span style="display:flex;gap:1rem;align-items:center;">
-        <span style="color:${color};font-weight:700;">${l.pct}%</span>
-        <span style="color:var(--text-muted);font-size:0.78rem;">${date}</span>
-      </span>
+    const isExcellent = l.pct >= 90;
+    const colorClass = l.pct >= 70 ? 'text-emerald-400 bg-emerald-500/10 ring-emerald-500/20' : l.pct >= 40 ? 'text-yellow-400 bg-yellow-500/10 ring-yellow-500/20' : 'text-red-400 bg-red-500/10 ring-red-500/20';
+    return `<div class="flex items-center justify-between p-3 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors rounded-xl group/log mb-1">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-600/30 to-brand-400/20 text-brand-300 flex items-center justify-center text-xs font-bold shrink-0 border border-brand-500/20 shadow-inner overflow-hidden">
+          ${user?.name ? initials(user.name) : '<i data-lucide="user" class="w-5 h-5 opacity-50"></i>'}
+        </div>
+        <div class="flex flex-col">
+          <span class="text-[0.85rem] text-gray-200"><strong>${user ? user.name : l.student_email}</strong> <span class="opacity-70 text-gray-400">tomó</span> <em class="not-italic text-brand-300 font-medium">${exam ? exam.title : 'Examen ' + l.exam_id}</em></span>
+          <span class="text-[0.7rem] text-gray-500 mt-0.5 flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i> ${date}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        ${isExcellent ? '<i data-lucide="star" class="w-4 h-4 text-emerald-400 mr-1 animate-pulse" title="¡Excelente!"></i>' : ''}
+        <div class="px-3 py-1.5 rounded-xl font-black text-[13px] shadow-sm tracking-wide lowercase ring-1 ${colorClass}">
+          ${l.pct}%
+        </div>
+      </div>
     </div>`;
   }).join('');
+  setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
 }
 
 // ============================================================
@@ -1218,6 +1542,13 @@ async function renderAnalytics() {
       });
       filterEl.value = currentVal;
     }
+    
+    if (window.syncanalyticsexamfilter) window.syncanalyticsexamfilter();
+    // ── Pre-calculate colors for theme sync ──
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.06)';
+    const tickColor = isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.5)';
+    const labelColor = isLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)';
 
     // Filtrar datos si se seleccionó un examen
     const filterId = filterEl.value;
@@ -1257,8 +1588,8 @@ async function renderAnalytics() {
           }
         },
         scales: {
-          x: { max: 100, grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: 'rgba(255,255,255,0.5)' } },
-          y: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.7)', font: { size: 11 } } }
+          x: { max: 100, grid: { color: gridColor }, ticks: { color: tickColor } },
+          y: { grid: { display: false }, ticks: { color: labelColor, font: { size: 11 } } }
         }
       }
     });
@@ -1290,7 +1621,7 @@ async function renderAnalytics() {
         plugins: {
           legend: {
             position: 'bottom',
-            labels: { color: 'rgba(255,255,255,0.7)', padding: 12, font: { size: 11 } }
+            labels: { color: labelColor, padding: 12, font: { size: 11 } }
           }
         }
       }
@@ -1326,13 +1657,13 @@ async function renderAnalytics() {
         },
         scales: {
           x: {
-            grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: { color: 'rgba(255,255,255,0.5)', maxRotation: 45, font: { size: 10 } }
+            grid: { color: gridColor },
+            ticks: { color: tickColor, maxRotation: 45, font: { size: 10 } }
           },
           y: {
             beginAtZero: true,
-            grid: { color: 'rgba(255,255,255,0.06)' },
-            ticks: { color: 'rgba(255,255,255,0.5)', stepSize: 1 }
+            grid: { color: gridColor },
+            ticks: { color: tickColor, stepSize: 1 }
           }
         }
       }
@@ -1341,24 +1672,37 @@ async function renderAnalytics() {
     // ── 4. Tabla: Preguntas más difíciles ──
     const tableEl = document.getElementById('hardest-questions-table');
     if (!data.hardestQuestions.length) {
-      tableEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem;">Se necesitan más intentos para generar datos.</p>';
+      tableEl.innerHTML = '<div class="flex flex-col items-center justify-center py-10 opacity-50"><i data-lucide="inbox" class="w-12 h-12 mb-3"></i><p class="text-sm font-medium">Se necesitan más intentos para generar datos.</p></div>';
+      if (window.lucide) window.lucide.createIcons();
     } else {
       tableEl.innerHTML = `
-        <table class="hardest-table">
-          <thead><tr><th>#</th><th>Examen</th><th>Pregunta</th><th>Promedio</th><th>Intentos</th></tr></thead>
-          <tbody>
-            ${data.hardestQuestions.map((q, i) => {
-        const color = q.examAvg >= 70 ? 'var(--secondary)' : q.examAvg >= 40 ? 'var(--warning)' : 'var(--danger)';
-        return `<tr>
-                <td>${i + 1}</td>
-                <td><strong>${q.examTitle}</strong></td>
-                <td>${formatLatexText(q.questionText)}</td>
-                <td style="color:${color};font-weight:700;">${q.examAvg}%</td>
-                <td>${q.attempts}</td>
-              </tr>`;
+        <div class="w-full">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="text-[10px] uppercase tracking-widest text-gray-500 border-b border-white/10">
+                <th class="pb-3 px-4 font-bold text-center w-12">#</th>
+                <th class="pb-3 font-bold">Examen</th>
+                <th class="pb-3 font-bold">Pregunta</th>
+                <th class="pb-3 font-bold text-center">Promedio</th>
+                <th class="pb-3 px-4 font-bold text-center">Intentos</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.hardestQuestions.map((q, i) => {
+        const colorClass = q.examAvg >= 70 ? 'text-emerald-400 bg-emerald-500/10 ring-emerald-500/20' : q.examAvg >= 40 ? 'text-yellow-400 bg-yellow-500/10 ring-yellow-500/20' : 'text-red-400 bg-red-500/10 ring-red-500/20';
+        return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td class="p-4 text-center text-gray-500 font-mono text-xs">${i + 1}</td>
+                  <td class="p-4 text-sm font-bold text-gray-300">${q.examTitle}</td>
+                  <td class="p-4 text-sm text-gray-300 latex-container min-w-[250px]">${formatLatexText(q.questionText)}</td>
+                  <td class="p-4 text-center">
+                    <span class="px-2.5 py-1 rounded-lg font-black text-xs ring-1 shadow-sm ${colorClass}">${q.examAvg}%</span>
+                  </td>
+                  <td class="p-4 text-center text-gray-400 text-sm">${q.attempts}</td>
+                </tr>`;
       }).join('')}
-          </tbody>
-        </table>`;
+            </tbody>
+          </table>
+        </div>`;
     }
 
   } catch (e) {
@@ -1406,8 +1750,8 @@ async function toggleModulePerm(email, examIds, grant) {
     await api('PUT', `/api/users/${encodeURIComponent(email)}/permissions`, { allowedExams: perms });
     student.allowedExams = perms;
     student.allowed_exams = perms;
-    // Refrescar la tabla para actualizar los toggles individuales
-    renderStudentsTable(cachedStudents, cachedExams);
+    // Refrescar la tabla aplicando los filtros actuales
+    applyStudentFilters();
     toast(grant ? `Módulo completo desbloqueado` : `Módulo completo bloqueado`, grant ? 'success' : 'info');
   } catch (e) {
     toast(e.message, 'error');
@@ -1584,27 +1928,83 @@ function updateLatexPreview() {
  *   \end{enumerate}
  */
 function parseLatexQuestions(rawText) {
+  if (!rawText) return [];
+  // 0. Limpiar comentarios y normalizar saltos de línea
   let text = rawText.replace(/\r\n/g, '\n').replace(/(?<!\\)%[^\n]*/g, '');
+  
+  // 1. Encontrar posiciones de \item, \begin, \end a nivel de pregunta
+  const tokens = [];
+  const tokenRe = /\\(item|begin|end)\b/gi;
+  let match;
+  while ((match = tokenRe.exec(text)) !== null) {
+    tokens.push({ type: match[1].toLowerCase(), index: match.index, length: match[0].length });
+  }
+
+  const questionChunks = [];
+  let depth = 0;
+  let lastIdx = -1;
+
+  tokens.forEach(t => {
+    if (t.type === 'begin') {
+      depth++;
+    } else if (t.type === 'end') {
+      if (depth === 1 && lastIdx !== -1) {
+        // Es el fin de un entorno global. Cerramos la última pregunta aquí.
+        questionChunks.push(text.substring(lastIdx, t.index));
+        lastIdx = -1;
+      }
+      depth--;
+    } else if (t.type === 'item') {
+      if (depth <= 1) {
+        if (lastIdx !== -1) {
+          questionChunks.push(text.substring(lastIdx, t.index));
+        }
+        lastIdx = t.index;
+      }
+    }
+  });
+  // Si quedó algo pendiente (ej: no hubo \end global)
+  if (lastIdx !== -1) {
+    questionChunks.push(text.substring(lastIdx));
+  }
 
   const questions = [];
-  // Cada bloque: \item <pregunta>\n\begin{enumerate}...\end{enumerate}
-  const blockRe = /\\item\s+([\s\S]*?)\n[ \t]*\\begin\{enumerate\}([\s\S]*?)\\end\{enumerate\}/g;
-  let match;
+  questionChunks.forEach(chunk => {
+    // Buscar el ÚLTIMO entorno de lista para extraer las opciones
+    const beginTagRe = /\\begin\{(enumerate|itemize|tasks|description)\}/gi;
+    let lastBeginMatch = null;
+    let bm;
+    while ((bm = beginTagRe.exec(chunk)) !== null) {
+      lastBeginMatch = bm;
+    }
 
-  while ((match = blockRe.exec(text)) !== null) {
-    const qText = match[1].trim().replace(/\s+/g, ' ');
-    const optsBlock = match[2];
-    const options = [];
-    const optRe = /\\item\s+(.+)/g;
-    let om;
-    while ((om = optRe.exec(optsBlock)) !== null) {
-      const opt = om[1].trim();
-      if (opt) options.push(opt);
+    if (lastBeginMatch) {
+      const lastBeginIdx = lastBeginMatch.index;
+      const envName = lastBeginMatch[1];
+      const endTagStr = `\\end{${envName}}`;
+      const lastEndIdx = chunk.toLowerCase().lastIndexOf(endTagStr.toLowerCase());
+
+      if (lastEndIdx !== -1 && lastEndIdx > lastBeginIdx) {
+        // qText: desde después del \item hasta el inicio del bloque de opciones
+        let qText = chunk.substring(0, lastBeginIdx).trim();
+        qText = qText.replace(/^\\item\b/i, '').trim();
+
+        const optsRaw = chunk.substring(lastBeginIdx + lastBeginMatch[0].length, lastEndIdx).trim();
+        const options = [];
+        const optRe = /\\item\b\s*([\s\S]*?)(?=\\item\b|$)/gi;
+        let om;
+        while ((om = optRe.exec(optsRaw)) !== null) {
+          const opt = om[1].trim();
+          if (opt) options.push(opt);
+        }
+        
+        if (qText && options.length >= 2) {
+          questions.push({ text: qText, options, correct: 0 });
+        }
+      }
     }
-    if (qText && options.length >= 2) {
-      questions.push({ text: qText, options, correct: 0 });
-    }
-  }
+  });
+
   return questions;
 }
 
@@ -1761,7 +2161,8 @@ function addQuestionBlock(data) {
         <button class="btn btn-danger btn-sm" onclick="removeQuestion(${idx})"><i data-lucide="trash-2" class="icon-sm"></i></button>
       </div>
       <div class="form-group">
-        <input class="form-input" type="text" id="q-text-${idx}" placeholder="Escribe la pregunta aquí..." value="${data ? escapeAttr(data.text) : ''}"/>
+        <input class="form-input" type="text" id="q-text-${idx}" placeholder="Escribe la pregunta aquí..." value="${data ? escapeAttr(data.text) : ''}" oninput="updateManualQPreview(${idx})"/>
+        <div id="q-preview-${idx}" class="latex-container mt-2 p-3 bg-black/20 rounded-xl text-sm border border-white/5 hidden"></div>
       </div>
       <div class="form-group" style="margin-top:0.3rem;">
         <label class="form-label" style="font-size:0.78rem;color:var(--primary);"><i data-lucide="image" class="icon-sm"></i> Imagen (URL, opcional)</label>
@@ -1786,9 +2187,58 @@ function addQuestionBlock(data) {
         <label class="form-label" style="font-size:0.78rem;color:var(--secondary);"><i data-lucide="lightbulb" class="icon-sm"></i> Justificación (por qué es correcta)</label>
         <textarea class="form-input" id="q-just-${idx}" rows="2"
           style="resize:vertical;font-size:0.83rem;"
-          placeholder="Explica brevemente por qué la respuesta marcada es la correcta...">${escapeAttr(just)}</textarea>
+          placeholder="Explica brevemente por qué la respuesta marcada es la correcta..." oninput="updateManualQPreview(${idx})">${escapeAttr(just)}</textarea>
+        <div id="j-preview-${idx}" class="latex-container mt-2 p-3 bg-black/20 rounded-xl text-[0.8rem] border border-white/5 hidden"></div>
       </div>
     </div>`);
+  // Inicializar preview si hay datos
+  if (data) setTimeout(() => updateManualQPreview(idx), 100);
+}
+
+/** Actualiza la previsualización de LaTeX en un bloque manual */
+function updateManualQPreview(idx) {
+  const text = document.getElementById(`q-text-${idx}`)?.value || '';
+  const just = document.getElementById(`q-just-${idx}`)?.value || '';
+  const qPre = document.getElementById(`q-preview-${idx}`);
+  const jPre = document.getElementById(`j-preview-${idx}`);
+
+  if (qPre) {
+    if (text.includes('$') || text.includes('\\')) {
+      qPre.innerHTML = `<strong>Vista previa:</strong><br>${formatLatexText(text)}`;
+      qPre.classList.remove('hidden');
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(qPre, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ]
+        });
+      }
+    } else {
+      qPre.classList.add('hidden');
+    }
+  }
+
+  if (jPre) {
+    if (just.includes('$') || just.includes('\\')) {
+      jPre.innerHTML = `<strong>Vista previa:</strong><br>${formatLatexText(just)}`;
+      jPre.classList.remove('hidden');
+      if (typeof renderMathInElement === 'function') {
+        renderMathInElement(jPre, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ]
+        });
+      }
+    } else {
+      jPre.classList.add('hidden');
+    }
+  }
 }
 
 function removeQuestion(idx) {
@@ -1910,23 +2360,48 @@ document.addEventListener('keydown', e => {
 // ============================================================
 function syncThemeIcons() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  document.querySelectorAll('.theme-toggle-btn').forEach(b => {
-    b.innerHTML = isLight ? '<i data-lucide="moon" class="icon-sm"></i>' : '<i data-lucide="sun" class="icon-sm"></i>';
+  document.querySelectorAll('.theme-toggle-icon').forEach(el => {
+    el.setAttribute('data-lucide', isLight ? 'moon' : 'sun');
   });
   if (window.lucide) window.lucide.createIcons();
 }
 
 function toggleTheme() {
-  const isNowLight = document.documentElement.getAttribute('data-theme') !== 'light';
-  document.documentElement.setAttribute('data-theme', isNowLight ? 'light' : 'dark');
+  const html = document.documentElement;
+  const isNowLight = html.getAttribute('data-theme') !== 'light';
+  html.setAttribute('data-theme', isNowLight ? 'light' : 'dark');
+  // Tailwind darkMode:'class' needs the 'dark' class on <html>
+  if (isNowLight) {
+    html.classList.remove('dark');
+  } else {
+    html.classList.add('dark');
+  }
   localStorage.setItem('examapp_theme', isNowLight ? 'light' : 'dark');
   syncThemeIcons();
+
+  // Re-render analytics if active to update chart colors
+  if (typeof renderAnalytics === 'function' && !document.getElementById('view-admin').classList.contains('hidden')) {
+    renderAnalytics();
+  }
+}
+
+function syncThemeIcons() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  document.querySelectorAll('.theme-toggle-icon').forEach(el => {
+    el.setAttribute('data-lucide', isLight ? 'moon' : 'sun');
+  });
+  if (window.lucide) lucide.createIcons();
 }
 
 (function applyTheme() {
   const saved = localStorage.getItem('examapp_theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
-  // Icons updated after first render via syncThemeIcons()
+  const html = document.documentElement;
+  html.setAttribute('data-theme', saved);
+  if (saved === 'light') {
+    html.classList.remove('dark');
+  } else {
+    html.classList.add('dark');
+  }
 })();
 
 // ============================================================
@@ -2054,7 +2529,7 @@ async function openLeaderboardModal() {
         <tbody>
           ${rows.map((r, i) => {
       const isMe = r.email === currentUser?.email;
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+      const medal = i === 0 ? '<i data-lucide="trophy" class="w-5 h-5 text-yellow-500"></i>' : i === 1 ? '<i data-lucide="award" class="w-5 h-5 text-gray-400"></i>' : i === 2 ? '<i data-lucide="award" class="w-5 h-5 text-yellow-700"></i>' : `<span class="text-gray-500 text-xs font-bold font-mono">#${i + 1}</span>`;
       return `<tr style="border-top:1px solid var(--card-border);${isMe ? 'background:rgba(108,99,255,0.08);' : ''}">
               <td style="padding:0.7rem;text-align:center;font-size:1rem;">${medal}</td>
               <td style="padding:0.7rem 1rem;">
@@ -2160,41 +2635,43 @@ async function renderAnnouncements() {
     const banners = items.filter(a => a.image_url);
     const texts = items.filter(a => !a.image_url);
 
-    let html = '<h2 class="section-title" style="margin-bottom:0.8rem;">\uD83D\uDCE2 Anuncios</h2>';
+    let html = '<h2 class="text-xl font-black text-white mb-4 flex items-center gap-2 font-outfit px-1"><i data-lucide="megaphone" class="w-5 h-5 text-brand-400"></i> Avisos Importantes</h2>';
 
     // Banners de imagen (carrusel horizontal)
     if (banners.length) {
-      html += `<div class="ann-banners-strip">${banners.map(a => `
-        <div class="ann-banner-card" onclick="openLightbox('${a.image_url}')">
-          <img src="${a.image_url}" alt="${a.title}" class="ann-banner-img"/>
-          <div class="ann-banner-overlay">
-            <span class="ann-banner-label">${a.title}</span>
-            <span class="ann-banner-zoom">\uD83D\uDD0D Ampliar</span>
+      html += `<div class="flex overflow-x-auto gap-4 pb-4 custom-scrollbar snap-x">${banners.map(a => `
+        <div class="relative w-72 h-40 rounded-3xl overflow-hidden shrink-0 snap-center group cursor-pointer border border-white/10 shadow-lg" onclick="openLightbox('${a.image_url}')">
+          <img src="${a.image_url}" alt="${a.title}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"/>
+          <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end p-4">
+            <span class="text-[0.9rem] font-bold text-white leading-tight drop-shadow-md">${a.title}</span>
+            <span class="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"><i data-lucide="zoom-in" class="w-3 h-3"></i> Ampliar</span>
           </div>
         </div>`).join('')}</div>`;
     }
 
     // Anuncios de texto
     if (texts.length) {
-      html += texts.map(a => {
+      html += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4">` + texts.map(a => {
         const date = new Date(a.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
         const linkBtn = a.link_url
-          ? `<a href="${a.link_url}" target="_blank" rel="noopener" class="ann-link-btn">\uD83D\uDD17 Abrir enlace</a>`
+          ? `<a href="${a.link_url}" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-brand-500/20 text-gray-300 hover:text-brand-300 flex items-center gap-1.5 shadow-sm border border-white/5"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> Enlace</a>`
           : '';
         return `
-          <div class="announcement-card">
-            <div class="ann-title">${a.title}</div>
-            ${a.content ? `<div class="ann-content">${a.content}</div>` : ''}
-            <div class="ann-footer-row">
-              <span class="ann-date">${date}</span>
+          <div class="glass-card p-5 rounded-3xl flex flex-col border border-white/5 hover:bg-white/5 transition-colors group relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-24 h-24 bg-brand-500/10 rounded-bl-full -mr-8 -mt-8 opacity-50 group-hover:scale-125 transition-transform duration-500"></div>
+            <div class="text-base font-black text-white font-outfit leading-tight mb-2 pr-6">${a.title}</div>
+            ${a.content ? `<div class="text-[0.85rem] text-gray-400 mb-4 line-clamp-3 leading-relaxed relative z-10">${a.content}</div>` : ''}
+            <div class="flex items-center justify-between mt-auto pt-4 border-t border-white/5 relative z-10">
+              <span class="text-[10px] font-bold text-gray-500 tracking-wider uppercase flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${date}</span>
               ${linkBtn}
             </div>
           </div>`;
-      }).join('');
+      }).join('') + `</div>`;
     }
 
     html += '<div style="margin-bottom:1rem;"></div>';
     section.innerHTML = html;
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
   } catch {
     section.innerHTML = '';
   }
@@ -2206,23 +2683,31 @@ async function renderAnnouncementsPanel() {
     cachedAnnouncements = await api('GET', '/api/announcements');
     const tbody = document.getElementById('announcements-tbody');
     if (!cachedAnnouncements.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin anuncios. Crea uno con el bot\u00F3n de arriba.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center p-8 text-gray-500 font-medium">Sin anuncios. Crea uno con el botón de arriba.</td></tr>';
       return;
     }
     tbody.innerHTML = cachedAnnouncements.map(a => `
-      <tr>
-        <td>
-          <strong>${a.title}</strong>
-          ${a.image_url ? '<span title="Tiene imagen" style="margin-left:0.4rem;">\uD83D\uDDBCufe0f</span>' : ''}
-          ${a.link_url ? '<span title="Tiene link"   style="margin-left:0.4rem;">\uD83D\uDD17</span>' : ''}
+      <tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
+        <td class="p-4">
+          <strong class="text-white flex items-center gap-2">${a.title}
+          ${a.image_url ? '<i data-lucide="image" class="w-3.5 h-3.5 text-blue-400" title="Tiene imagen"></i>' : ''}
+          ${a.link_url ? '<i data-lucide="link" class="w-3.5 h-3.5 text-brand-400" title="Tiene link"></i>' : ''}
+          </strong>
         </td>
-        <td style="color:var(--text-muted);font-size:0.84rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.content || '\u2014'}</td>
-        <td><span class="role-badge ${a.active ? 'role-admin' : 'role-student'}">${a.active ? '\u2705 Visible' : '\uD83D\uDD12 Oculto'}</span></td>
-        <td style="white-space:nowrap;">
-          <button class="btn btn-ghost btn-sm" onclick="openEditAnnouncementModal('${a.id}')">\u270F\uFE0F</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${a.id}')">\uD83D\uDDD1\uFE0F</button>
+        <td class="p-4 text-[0.85rem] text-gray-400 max-w-[220px] truncate" title="${a.content || ''}">${a.content || '—'}</td>
+        <td class="p-4"><span class="px-2 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase border shadow-sm ${a.active ? 'bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 text-emerald-300 border-emerald-500/20' : 'bg-gradient-to-r from-gray-500/20 to-gray-600/20 text-gray-400 border-gray-500/20'}">${a.active ? '✅ Visible' : '🔒 Oculto'}</span></td>
+        <td class="p-4 pr-6">
+          <div class="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+            <button class="px-3 py-2 rounded-xl text-[11px] font-bold transition-all relative overflow-hidden bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center shadow-sm" onclick="openEditAnnouncementModal('${a.id}')">
+              <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white flex items-center shadow-sm" onclick="deleteAnnouncement('${a.id}')">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
         </td>
       </tr>`).join('');
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
   } catch (e) {
     toast('Error: ' + e.message, 'error');
   }
@@ -2309,12 +2794,21 @@ async function init() {
 }
 
 // Ensure init is called on load if not called elsewhere
-document.addEventListener('DOMContentLoaded', () => {
-  // If not already in auth or student/admin view, init
+function startup() {
+  if (typeof AOS !== 'undefined') {
+    AOS.init({ once: true, duration: 800 });
+  }
   if (!document.querySelector('.view.active')) {
     init();
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startup);
+} else {
+  startup();
+}
+
 
 // ============================================================
 //  MATERIAL DE ESTUDIO
@@ -2327,21 +2821,32 @@ async function renderMaterialPanel() {
     cachedMaterial = await api('GET', '/api/material');
     const tbody = document.getElementById('material-tbody');
     if (!cachedMaterial.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No hay material agregado aún. Haz clic en "+ Agregar material".</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center p-8 text-gray-500 font-medium">No hay material agregado aún. Haz clic en "+ Agregar material".</td></tr>';
       return;
     }
+
+    // Ordenar material por título
+    cachedMaterial.sort((a, b) => naturalSort(a.title || '', b.title || ''));
+
     tbody.innerHTML = cachedMaterial.map(m => {
       const shortLink = m.link.length > 45 ? m.link.slice(0, 45) + '…' : m.link;
-      return `<tr>
-        <td><strong>${m.icon || '📄'} ${m.title}</strong></td>
-        <td>${m.file_name}</td>
-        <td><a href="${m.link}" target="_blank" style="color:var(--primary-light);font-size:0.82rem;word-break:break-all;">${shortLink}</a></td>
-        <td style="white-space:nowrap;">
-          <button class="btn btn-ghost btn-sm" onclick="openEditMaterialModal('${m.id}')">✏️</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteMaterial('${m.id}')">🗑️</button>
+      return `<tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
+        <td class="p-4"><strong class="flex items-center gap-2 text-white"><i data-lucide="${m.icon || 'file-text'}" class="w-5 h-5 text-brand-400"></i> ${m.title}</strong></td>
+        <td class="p-4 text-sm text-gray-300">${m.file_name}</td>
+        <td class="p-4"><a href="${m.link}" target="_blank" class="text-[0.82rem] text-brand-400 hover:text-brand-300 transition-colors break-all flex items-center gap-1.5"><i data-lucide="external-link" class="w-3.5 h-3.5"></i> ${shortLink}</a></td>
+        <td class="p-4 pr-6">
+          <div class="flex justify-end gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+            <button class="px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center shadow-sm" onclick="openEditMaterialModal('${m.id}')">
+              <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white flex items-center shadow-sm" onclick="deleteMaterial('${m.id}')">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
         </td>
       </tr>`;
     }).join('');
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
   } catch (e) {
     toast('Error cargando material: ' + e.message, 'error');
   }
@@ -2371,29 +2876,38 @@ async function renderStudyMaterial() {
     grid.innerHTML = order.map((title, i) => {
       const files = groups[title];
       const fileRows = files.map(m => `
-        <a class="material-file-row" href="${m.link}" target="_blank" rel="noopener noreferrer">
-          <span class="material-file-icon">${m.icon || '📄'}</span>
-          <span class="material-file-name">${m.file_name}</span>
-          <span class="material-file-open">Abrir en Drive →</span>
+        <a class="flex items-center justify-between p-3 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors cursor-pointer group/file rounded-xl" href="${m.link}" target="_blank" rel="noopener noreferrer">
+          <div class="flex items-center gap-3 overflow-hidden">
+            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 border border-white/10 group-hover/file:bg-white/10 transition-colors">
+              <i data-lucide="${m.icon || 'file-text'}" class="w-4 h-4 text-brand-300"></i>
+            </div>
+            <span class="text-sm font-bold text-gray-200 group-hover/file:text-white transition-colors truncate">${m.file_name}</span>
+          </div>
+          <span class="text-[10px] uppercase tracking-wider font-bold text-brand-400 opacity-0 group-hover/file:opacity-100 transition-opacity whitespace-nowrap pl-2 flex items-center gap-1.5"><i data-lucide="external-link" class="w-3.5 h-3.5 inline"></i> Abrir</span>
         </a>`).join('');
 
       return `
-        <div class="material-module-card">
-          <div class="material-module-header" onclick="toggleMaterialGroup(${i})">
-            <span class="material-module-icon">📚</span>
-            <div class="material-module-info">
-              <h4>${title}</h4>
-              <span>${files.length} archivo${files.length !== 1 ? 's' : ''}</span>
+        <div class="glass-card rounded-3xl flex flex-col relative overflow-hidden transition-all duration-300 border border-white/5 mb-4">
+          <div class="p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-colors z-10" onclick="toggleMaterialGroup(${i})">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500/30 to-blue-400/10 flex items-center justify-center text-xl shadow-inner border border-blue-500/20 shrink-0">
+              <i data-lucide="folder" class="w-5 h-5 text-blue-300"></i>
             </div>
-            <span class="exam-group-arrow" id="mat-arrow-${i}">▼</span>
+            <div class="flex flex-col flex-1">
+              <h4 class="text-base font-black text-white leading-tight font-outfit mt-0.5">${title}</h4>
+              <span class="text-[0.75rem] text-gray-400 font-medium mt-0.5">${files.length} archivo${files.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 border border-white/10 text-gray-400 transition-transform duration-300" id="mat-arrow-${i}">
+              <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            </div>
           </div>
-          <div class="material-module-body hidden" id="mat-body-${i}">
+          <div class="hidden flex-col gap-1 px-3 pb-3 pt-1 border-t border-white/5 bg-black/20" id="mat-body-${i}">
             ${fileRows}
           </div>
         </div>`;
     }).join('');
 
     section.style.display = '';
+    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 10);
   } catch {
     section.style.display = 'none';
   }
@@ -2412,7 +2926,7 @@ function openAddMaterialModal() {
   document.getElementById('mat-title').value = '';
   document.getElementById('mat-filename').value = '';
   document.getElementById('mat-link').value = '';
-  document.getElementById('mat-icon').value = '📄';
+  document.getElementById('mat-icon').value = 'file-text';
   document.getElementById('mat-order').value = '0';
   document.getElementById('modal-material-title').textContent = 'Agregar material';
   openModal('modal-material');
@@ -2425,8 +2939,8 @@ function openEditMaterialModal(id) {
   document.getElementById('mat-title').value = m.title;
   document.getElementById('mat-filename').value = m.file_name;
   document.getElementById('mat-link').value = m.link;
-  document.getElementById('mat-icon').value = m.icon || '📄';
-  document.getElementById('mat-order').value = m.sort_order || 0;
+  document.getElementById('mat-icon').value = m?.icon || 'file-text';
+  document.getElementById('mat-order').value = m?.sort_order || 0;
   document.getElementById('modal-material-title').textContent = 'Editar material';
   openModal('modal-material');
 }
@@ -2436,7 +2950,7 @@ async function saveMaterial() {
   const title = document.getElementById('mat-title').value.trim();
   const file_name = document.getElementById('mat-filename').value.trim();
   const link = document.getElementById('mat-link').value.trim();
-  const icon = document.getElementById('mat-icon').value.trim() || '📄';
+  const icon = document.getElementById('mat-icon').value.trim() || 'file-text';
   const sort_order = parseInt(document.getElementById('mat-order').value) || 0;
 
   if (!title || !file_name || !link) {
@@ -2567,16 +3081,12 @@ async function loadInbox() {
 
   // Render tabs + toolbar skeleton first
   container.innerHTML = `
-    <div class="inbox-tabs">
-      <button class="inbox-tab active" id="inbox-tab-inbox" onclick="setInboxView('inbox')"><i data-lucide="inbox" class="icon-sm"></i> Recibidos</button>
-      <button class="inbox-tab" id="inbox-tab-arch" onclick="setInboxView('archived')"><i data-lucide="archive" class="icon-sm"></i> Archivados</button>
+    <div class="flex items-center gap-2 mb-4">
+      <button class="px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2.5 transition-all ${inboxView === 'inbox' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 ring-1 ring-brand-400' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}" id="inbox-tab-inbox" onclick="setInboxView('inbox')"><i data-lucide="inbox" class="w-4 h-4"></i> Recibidos</button>
+      <button class="px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2.5 transition-all ${inboxView === 'archived' ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 ring-1 ring-brand-400' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}" id="inbox-tab-arch" onclick="setInboxView('archived')"><i data-lucide="archive" class="w-4 h-4"></i> Archivados</button>
     </div>
-    <div id="inbox-toolbar" class="inbox-toolbar hidden"></div>
-    <div id="inbox-messages"><p style="color:var(--text-muted);text-align:center;padding:2rem;">Cargando...</p></div>`;
-
-  // Restore active tab state
-  document.getElementById('inbox-tab-inbox').classList.toggle('active', inboxView === 'inbox');
-  document.getElementById('inbox-tab-arch').classList.toggle('active', inboxView === 'archived');
+    <div id="inbox-toolbar" class="hidden items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5 mb-4 shadow-sm"></div>
+    <div id="inbox-messages" class="flex flex-col gap-2"><div class="flex flex-col items-center justify-center py-10 opacity-50"><i data-lucide="loader" class="w-8 h-8 animate-spin mb-3"></i><p class="text-sm font-medium">Cargando...</p></div></div>`;
 
   try {
     const allMsgs = await api('GET', '/api/messages/inbox');
@@ -2585,59 +3095,70 @@ async function loadInbox() {
     const toolbar = document.getElementById('inbox-toolbar');
 
     if (!msgs.length) {
-      msgDiv.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:3rem;">${inboxView === 'archived' ? '<i data-lucide="archive" class="icon-lg"></i><br>No hay mensajes archivados.' : '<i data-lucide="mail-open" class="icon-lg"></i><br>No tienes mensajes nuevos.'}</p>`;
+      msgDiv.innerHTML = `<div class="flex flex-col items-center justify-center py-16 opacity-50"><i data-lucide="${inboxView === 'archived' ? 'archive' : 'mail-open'}" class="w-12 h-12 mb-4 text-gray-400"></i><p class="text-sm font-medium text-gray-300">${inboxView === 'archived' ? 'No hay mensajes archivados.' : 'No tienes mensajes nuevos.'}</p></div>`;
       if (window.lucide) window.lucide.createIcons({ root: msgDiv });
       return;
     }
 
     // Toolbar with select-all + actions
     toolbar.classList.remove('hidden');
+    toolbar.classList.add('flex');
     toolbar.innerHTML = `
-      <label class="inbox-check-label" style="gap:0.5rem;">
-        <input type="checkbox" id="inbox-select-all" onchange="toggleSelectAll(this.checked)" />
-        <span style="font-size:0.83rem;color:var(--text-muted);">Seleccionar todo</span>
+      <label class="flex items-center cursor-pointer select-none gap-2 hover:bg-white/5 px-2 py-1 rounded-lg transition-colors group">
+        <div class="relative flex items-center justify-center">
+          <input type="checkbox" id="inbox-select-all" class="peer appearance-none w-4 h-4 border border-gray-500 rounded bg-transparent checked:border-brand-500 checked:bg-brand-500 transition-all cursor-pointer" onchange="toggleSelectAll(this.checked)" />
+          <i data-lucide="check" class="absolute w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none"></i>
+        </div>
+        <span class="text-[0.83rem] text-gray-400 group-hover:text-gray-300 font-medium tracking-wide">Seleccionar todo</span>
       </label>
-      <div class="inbox-actions" id="inbox-bulk-actions" style="display:none;">
+      <div class="flex items-center gap-2 border-l border-white/10 pl-3" id="inbox-bulk-actions" style="display:none;">
         ${inboxView === 'inbox'
-        ? `<button class="btn btn-ghost btn-sm" onclick="archiveSelectedMessages()"><i data-lucide="archive" class="icon-sm"></i> Archivar</button>`
-        : `<button class="btn btn-ghost btn-sm" onclick="archiveSelectedMessages(false)"><i data-lucide="inbox" class="icon-sm"></i> Mover a recibidos</button>`}
-        <button class="btn btn-danger btn-sm" onclick="deleteSelectedMessages()"><i data-lucide="trash-2" class="icon-sm"></i> Eliminar</button>
+        ? `<button class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center gap-1.5 shadow-sm" onclick="archiveSelectedMessages()"><i data-lucide="archive" class="w-3.5 h-3.5"></i> Archivar</button>`
+        : `<button class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center gap-1.5 shadow-sm" onclick="archiveSelectedMessages(false)"><i data-lucide="inbox" class="w-3.5 h-3.5"></i> Mover a recibidos</button>`}
+        <button class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white flex items-center gap-1.5 shadow-sm" onclick="deleteSelectedMessages()"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Eliminar</button>
       </div>
-      <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="emptyInbox()">
-        <i data-lucide="trash-2" class="icon-sm"></i> ${inboxView === 'archived' ? 'Vaciar archivo' : 'Vaciar bandeja'}
+      <button class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all text-gray-400 hover:bg-red-500/10 hover:text-red-400 flex items-center gap-1.5 shadow-sm ml-auto" onclick="emptyInbox()">
+        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> ${inboxView === 'archived' ? 'Vaciar archivo' : 'Vaciar bandeja'}
       </button>`;
 
     // Message cards
     msgDiv.innerHTML = msgs.map(m => {
       const date = new Date(m.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const badge = m.type === 'suggestion'
-        ? '<span class="msg-type-badge suggestion"><i data-lucide="lightbulb" class="icon-sm" style="margin-right:0.2rem;"></i> Sugerencia</span>'
-        : '<span class="msg-type-badge message"><i data-lucide="message-circle" class="icon-sm" style="margin-right:0.2rem;"></i> Mensaje</span>';
-      const unreadDot = (!m.is_read && !m.archived) ? '<span class="msg-unread-dot"></span>' : '';
+        ? '<span class="px-2 py-0.5 rounded-md text-[9px] font-bold tracking-wider uppercase bg-yellow-500/20 text-yellow-300 border border-yellow-500/20 flex items-center gap-1 shadow-sm"><i data-lucide="lightbulb" class="w-3 h-3"></i> Sugerencia</span>'
+        : '<span class="px-2 py-0.5 rounded-md text-[9px] font-bold tracking-wider uppercase bg-brand-500/20 text-brand-300 border border-brand-500/20 flex items-center gap-1 shadow-sm"><i data-lucide="message-circle" class="w-3 h-3"></i> Mensaje</span>';
+      
+      const isUnread = (!m.is_read && !m.archived);
+      
       const archBtn = inboxView === 'inbox'
-        ? `<button class="btn btn-ghost btn-sm inbox-action-btn" title="Archivar" onclick="event.stopPropagation();archiveMessage(${m.id})"><i data-lucide="archive" class="icon-sm"></i></button>`
-        : `<button class="btn btn-ghost btn-sm inbox-action-btn" title="Mover a recibidos" onclick="event.stopPropagation();archiveMessage(${m.id}, false)"><i data-lucide="inbox" class="icon-sm"></i></button>`;
+        ? `<button class="px-2 py-2 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center justify-center shadow-sm" title="Archivar" onclick="event.stopPropagation();archiveMessage(${m.id})"><i data-lucide="archive" class="w-4 h-4"></i></button>`
+        : `<button class="px-2 py-2 rounded-xl text-xs font-bold transition-all bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white flex items-center justify-center shadow-sm" title="Mover a recibidos" onclick="event.stopPropagation();archiveMessage(${m.id}, false)"><i data-lucide="inbox" class="w-4 h-4"></i></button>`;
+      
       return `
-        <div class="inbox-card ${m.is_read ? '' : 'inbox-unread'}" id="msg-card-${m.id}">
-          <div class="inbox-card-inner">
-            <label class="inbox-check-label" onclick="event.stopPropagation()">
-              <input type="checkbox" class="inbox-msg-check" value="${m.id}"
-                onchange="onMsgCheckChange()" />
-            </label>
-            <div class="inbox-card-body" onclick="viewMessage(${m.id},'${escapeAttr(m.from_name || m.from_email)}','${escapeAttr(m.from_section || '')}','${escapeAttr(m.subject || '(sin asunto)')}','${escapeAttr(m.body)}','${date}')">
-              <div class="inbox-top">
-                ${unreadDot}
-                <span class="inbox-from"><strong>${m.from_name || m.from_email}</strong>${m.from_section ? ' · ' + m.from_section : ''}</span>
-                ${badge}
-                <span class="inbox-date">${date}</span>
+        <div class="glass-panel p-4 rounded-2xl flex gap-3 group border hover:-translate-y-0.5 hover:shadow-lg transition-all cursor-pointer ${m.is_read ? 'opacity-80 border-white/5 hover:bg-white/5' : 'bg-gradient-to-r from-brand-500/10 to-transparent border-brand-500/20'}" id="msg-card-${m.id}" onclick="viewMessage(${m.id},'${escapeAttr(m.from_name || m.from_email)}','${escapeAttr(m.from_section || '')}','${escapeAttr(m.subject || '(sin asunto)')}','${escapeAttr(m.body)}','${date}')">
+          <label class="flex shrink-0 pt-1" onclick="event.stopPropagation()">
+            <div class="relative flex items-center justify-center">
+              <input type="checkbox" class="inbox-msg-check peer appearance-none w-4 h-4 border border-gray-500 rounded bg-transparent checked:border-brand-500 checked:bg-brand-500 transition-all cursor-pointer" value="${m.id}" onchange="onMsgCheckChange()" />
+              <i data-lucide="check" class="absolute w-2.5 h-2.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none"></i>
+            </div>
+          </label>
+          <div class="flex-1 flex flex-col overflow-hidden">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-2">
+                ${isUnread ? '<div class="w-2 h-2 rounded-full bg-brand-400 shadow-[0_0_8px_rgba(108,99,255,0.8)] animate-pulse shrink-0"></div>' : ''}
+                <span class="text-white font-bold text-sm flex items-center gap-2 truncate">${m.from_name || m.from_email} ${m.from_section ? `<span class="bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded text-[9px] font-mono tracking-wider">${m.from_section}</span>` : ''}</span>
               </div>
-              <div class="inbox-subject">${m.subject || '(sin asunto)'}</div>
-              <div class="inbox-preview">${m.body.slice(0, 110)}${m.body.length > 110 ? '…' : ''}</div>
+              <div class="flex items-center gap-3 shrink-0">
+                ${badge}
+                <span class="text-[0.7rem] text-gray-500 font-medium">${date}</span>
+              </div>
             </div>
-            <div class="inbox-card-btns">
-              ${archBtn}
-              <button class="btn btn-danger btn-sm inbox-action-btn" title="Eliminar" onclick="event.stopPropagation();deleteMessage(${m.id})"><i data-lucide="trash-2" class="icon-sm"></i></button>
-            </div>
+            <div class="text-[0.9rem] font-medium ${m.is_read ? 'text-gray-300' : 'text-white drop-shadow-sm'} mb-1 leading-tight truncate px-1">${m.subject || '(sin asunto)'}</div>
+            <div class="text-[0.8rem] text-gray-400 line-clamp-1 leading-relaxed px-1">${m.body}</div>
+          </div>
+          <div class="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity pl-2 shrink-0">
+            ${archBtn}
+            <button class="px-2 py-2 rounded-xl text-xs font-bold transition-all bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white flex items-center justify-center shadow-sm" title="Eliminar" onclick="event.stopPropagation();deleteMessage(${m.id})"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
           </div>
         </div>`;
     }).join('');
@@ -2859,15 +3380,28 @@ function lqSound(type) {
 }
 
 function lqRenderPodium(containerId, scores) {
-  const sorted = [...scores].sort((a,b) => b.score - a.score).slice(0,3);
-  const medals = ['🥇','🥈','🥉'];
-  const colors = ['#FFD700','#C0C0C0','#CD7F32'];
-  document.getElementById(containerId).innerHTML = sorted.map((p,i) => `
-    <div class="lq-podium-card" style="border-color:${colors[i]||'var(--card-border)'}">
-      <div style="font-size:2.5rem;">${medals[i]||''}</div>
-      <div style="font-weight:700;font-size:1.1rem;">${p.name}</div>
-      <div style="color:var(--secondary);font-size:1.3rem;font-weight:900;">${p.score} pts</div>
-    </div>`).join('');
+  const sorted = [...scores].sort((a,b) => b.score - a.score);
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  
+  const heights = ['h-40 md:h-48', 'h-52 md:h-60', 'h-32 md:h-40'];
+  const colors = ['bg-slate-400 text-slate-900', 'bg-yellow-400 text-yellow-900', 'bg-amber-700 text-amber-100'];
+  const pData = [sorted[1], sorted[0], sorted[2]]; // Posiciones 2, 1, 3 en el podio
+
+  container.innerHTML = pData.map((p, i) => {
+    if (!p) return `<div class="flex-1 max-w-[120px]"></div>`;
+    const rank = (i === 0 ? 2 : i === 1 ? 1 : 3);
+    return `
+      <div class="flex-1 max-w-[160px] flex flex-col items-center justify-end" data-aos="fade-up" data-aos-delay="${i*150}">
+        <div class="text-sm md:text-base font-bold text-white mb-1 truncate w-full text-center px-1">${p.name}</div>
+        <div class="text-xs font-medium text-brand-300 mb-3">${p.score} pts</div>
+        <div class="w-full ${heights[i]} ${colors[i]} rounded-t-2xl border border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.1)] flex items-start justify-center pt-4 transition-all hover:scale-105">
+          <span class="font-black text-4xl opacity-40">${rank}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function lqRenderScoreRows(containerId, scores) {
@@ -2891,9 +3425,49 @@ function lqPreviewQuestions() {
   if (!qRaw.trim()) { toast('Escribe las preguntas primero.', 'error'); return; }
   const qs = lqParseQuestions(qRaw, aRaw);
   if (!qs.length) { toast('No se detectaron preguntas. Revisa el formato.', 'error'); return; }
+  
   const el = document.getElementById('lq-preview');
-  el.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:0.5rem;">${qs.length} pregunta(s) detectadas:</p>` +
-    qs.map((q,i) => `<p style="margin:0.3rem 0;font-size:0.88rem;"><i data-lucide="edit-3" class="icon-sm"></i> <strong>${i+1}.</strong> ${q.text.slice(0,80)}${q.text.length>80?'…':''}</p>`).join('');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="flex items-center gap-2 mb-6 p-3 bg-brand-400/5 border-l-4 border-brand-400 rounded-r-xl" data-aos="fade-right">
+      <i data-lucide="check-square" class="w-5 h-5 text-brand-400"></i>
+      <span class="text-sm font-bold text-gray-200">${qs.length} pregunta(s) detectadas</span>
+      <span class="text-[0.7rem] text-gray-500 ml-auto uppercase tracking-widest font-bold">Resumen de contenido</span>
+    </div>
+    <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+      ${qs.map((q, i) => `
+        <div class="glass-panel p-5 rounded-[1.5rem] border border-white/5 hover:border-brand-400/30 transition-all duration-300 group" data-aos="fade-up" data-aos-delay="${i*50}">
+          <div class="flex gap-4">
+            <div class="flex-shrink-0 w-8 h-8 rounded-xl bg-gradient-to-br from-brand-600 to-brand-400 flex items-center justify-center text-xs font-black text-white shadow-lg shadow-brand-400/10 group-hover:scale-110 transition-transform">
+              ${i+1}
+            </div>
+            <div class="flex-1 pt-1">
+              <div class="text-[0.95rem] text-gray-100 leading-relaxed font-medium mb-4">${lqProcessText(q.text)}</div>
+              
+              ${q.options && q.options.length ? `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-white/5">
+                  ${q.options.map((opt, oi) => {
+                    const isCorrect = q.correct === oi;
+                    return `
+                      <div class="flex items-center gap-2 p-2.5 rounded-xl bg-white/5 border ${isCorrect ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/5'} transition-colors">
+                        <span class="text-[0.7rem] font-bold ${isCorrect ? 'text-emerald-400' : 'text-brand-400'} w-5 h-5 rounded-lg bg-black/20 flex items-center justify-center">${String.fromCharCode(65+oi)}</span>
+                        <div class="text-[0.8rem] text-gray-400 truncate">${lqProcessText(opt)}</div>
+                        ${isCorrect ? '<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400 ml-auto"></i>' : ''}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  
+  if (window.updateIcons) window.updateIcons();
+  if (typeof AOS !== 'undefined') AOS.refresh();
 }
 
 // ── ADMIN: Crear sala ────────────────────────────────────────
@@ -3106,21 +3680,6 @@ function lqReset() {
   if (preview) preview.innerHTML = '';
 }
 
-// ── ALUMNO: Modal ────────────────────────────────────────────
-function showStudentLiveSection() {
-  const modal = document.getElementById('slq-modal-overlay');
-  if (!modal) return;
-  modal.classList.remove('hidden');
-  slqShow('slq-join');
-  const inp = document.getElementById('slq-code-input');
-  if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 200); }
-}
-
-function slqCloseModal() {
-  const modal = document.getElementById('slq-modal-overlay');
-  if (modal) modal.classList.add('hidden');
-}
-
 // ── ALUMNO: Unirse ───────────────────────────────────────────
 async function slqJoin() {
   const code = document.getElementById('slq-code-input').value.trim().toUpperCase();
@@ -3214,13 +3773,29 @@ async function slqJoin() {
     clearInterval(slqTimerInterval);
     if (payload.correct) lqSound('correct'); else lqSound('wrong');
     slqShow('slq-answered');
-    document.getElementById('slq-result-icon').innerHTML = payload.correct ? '<i data-lucide="check-circle" class="icon-hero" style="color:var(--secondary)"></i>' : '<i data-lucide="x-octagon" class="icon-hero" style="color:var(--danger)"></i>';
+    
+    document.getElementById('slq-result-icon').innerHTML = payload.correct 
+      ? '<i data-lucide="check-circle" class="w-20 h-20 text-emerald-400" style="filter:drop-shadow(0 0 10px rgba(52,211,153,0.5))"></i>' 
+      : '<i data-lucide="x-octagon" class="w-20 h-20 text-red-400" style="filter:drop-shadow(0 0 10px rgba(248,113,113,0.5))"></i>';
+    
     if (window.lucide) window.lucide.createIcons({ root: document.getElementById('slq-result-icon') });
     document.getElementById('slq-result-text').textContent = payload.correct ? '¡Correcto!' : 'Incorrecto';
     document.getElementById('slq-points-gained').textContent = payload.correct ? `+${payload.pts} puntos` : '+0 puntos';
-    // Ocultar reveal hasta que llegue el marcador
-    const rev = document.getElementById('slq-correct-reveal');
-    if (rev) rev.classList.add('hidden');
+    
+    // Revelar respuesta correcta inmediatamente
+    if (payload.correctIdx !== undefined) {
+      const letters = ['A','B','C','D'];
+      const correctText = (slqCurrentOptions && slqCurrentOptions[payload.correctIdx]) 
+        ? `${letters[payload.correctIdx]}) ${slqCurrentOptions[payload.correctIdx]}` 
+        : 'Cargando...';
+      
+      const rev = document.getElementById('slq-correct-reveal');
+      const text = document.getElementById('slq-correct-text');
+      if (rev && text) {
+        text.innerHTML = lqProcessText(correctText);
+        rev.classList.remove('hidden');
+      }
+    }
   });
 
   await slqChannel.subscribe(async (status) => {
@@ -3242,14 +3817,50 @@ async function slqJoin() {
  */
 function lqProcessText(raw) {
   if (!raw) return '';
-  // 1. Escape HTML (seguridad)
-  let t = raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 
-  // 2. Comandos de texto LaTeX más comunes
-  // Un solo nivel de llaves (no anidadas)
+  // Strategy: protect math blocks from HTML escaping by replacing them with
+  // placeholders first, then escape HTML on remaining text, then restore math
+  // rendered with KaTeX.
+
+  const mathBlocks = [];
+  const placeholder = (i) => `\x00MATH${i}\x00`;
+
+  function renderKatex(math, display) {
+    try {
+      return typeof katex !== 'undefined'
+        ? katex.renderToString(math.trim(), { displayMode: display, throwOnError: false })
+        : (display ? `\\[${math}\\]` : `$${math}$`);
+    } catch(e) { return display ? `[${math}]` : `$${math}$`; }
+  }
+
+  let t = raw;
+
+  // 1. Extract and replace math blocks with placeholders (in priority order)
+  // \begin{equation(*)}
+  t = t.replace(/\\begin\{equation\*?\}([\s\S]+?)\\end\{equation\*?\}/gi, (_, math) => {
+    const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, true)); return placeholder(idx);
+  });
+  // \[ ... \]  display math
+  t = t.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => {
+    const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, true)); return placeholder(idx);
+  });
+  // $$ ... $$ display
+  t = t.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+    const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, true)); return placeholder(idx);
+  });
+  // \( ... \)  inline math
+  t = t.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => {
+    const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, false)); return placeholder(idx);
+  });
+  // $ ... $   inline math (single dollar, skip newlines)
+  t = t.replace(/\$([^$\n]+?)\$/g, (_, math) => {
+    const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, false)); return placeholder(idx);
+  });
+
+  // 2. Escape HTML on remaining text
+  t = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 3. LaTeX text commands
   t = t.replace(/\\textbf\{([^}]*)\}/g,   '<strong>$1</strong>');
   t = t.replace(/\\textit\{([^}]*)\}/g,   '<em>$1</em>');
   t = t.replace(/\\emph\{([^}]*)\}/g,     '<em>$1</em>');
@@ -3258,57 +3869,36 @@ function lqProcessText(raw) {
   t = t.replace(/\\textsc\{([^}]*)\}/g,   '<span style="font-variant:small-caps">$1</span>');
   t = t.replace(/\\textsuperscript\{([^}]*)\}/g, '<sup>$1</sup>');
   t = t.replace(/\\textsubscript\{([^}]*)\}/g,   '<sub>$1</sub>');
-  // \text{} dentro de modo matemático (fuera): tratar como texto plano
   t = t.replace(/\\text\{([^}]*)\}/g, '$1');
-  // Saltos de línea LaTeX
+
+  // 4. Line breaks
   t = t.replace(/\\\\/g, '<br>');
   t = t.replace(/\\newline/g, '<br>');
   t = t.replace(/\\linebreak/g, '<br>');
   t = t.replace(/\\par\b/g, '</p><p>');
   t = t.replace(/\\noindent\b/g, '');
-  // Espacios: \quad, \qquad, \,  \;  \:
+
+  // 5. Lists
+  t = t.replace(/\\begin\{enumerate\}(?:\[.*?\])?/g, '<ol class="list-decimal ml-6 mb-4 space-y-1">');
+  t = t.replace(/\\end\{enumerate\}/g, '</ol>');
+  t = t.replace(/\\begin\{itemize\}/g, '<ul class="list-disc ml-6 mb-4 space-y-1">');
+  t = t.replace(/\\end\{itemize\}/g, '</ul>');
+  t = t.replace(/\\item\s+/g, '<li>');
+
+  // 6. Spacing
   t = t.replace(/\\qquad/g, '&emsp;&emsp;');
-  t = t.replace(/\\quad/g, '&emsp;');
+  t = t.replace(/\\quad/g,  '&emsp;');
   t = t.replace(/\\[,;:]/g, '&thinsp;');
   t = t.replace(/\\hspace\{[^}]*\}/g, '&emsp;');
   t = t.replace(/\\vspace\{[^}]*\}/g, '<br>');
-  t = t.replace(/\\linespace\b/g, '<br>');
-  // Puntos suspensivos
   t = t.replace(/\\ldots|\\dots|\\cdots/g, '…');
-  // Caracteres escapados
   t = t.replace(/\\%/g, '%');
-  t = t.replace(/\\&amp;/g, '&amp;');
   t = t.replace(/\\#/g, '#');
-  t = t.replace(/\\\$/g, '$');
-  t = t.replace(/\\_ /g, '_');
+  t = t.replace(/\\rule\{[^}]*\}\{[^}]*\}/g, '<span class="lq-blank">______</span>');
 
-  // 3. \rule{w}{h}  →  línea en blanco visual _____
-  t = t.replace(/\\rule\{[^}]*\}\{[^}]*\}/g,
-    '<span class="lq-blank">______</span>');
+  // 7. Restore math placeholders
+  t = t.replace(/\x00MATH(\d+)\x00/g, (_, i) => mathBlocks[+i] || '');
 
-  // 4. $$...$$ matemática en bloque
-  t = t.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
-    try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math.trim(), { displayMode: true,  throwOnError: false })
-      : `[${math}]`; } catch(e) { return `[${math}]`; }
-  });
-  // 5. $...$ matemática en línea
-  t = t.replace(/\$([^$\n]+?)\$/g, (_, math) => {
-    try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math.trim(), { displayMode: false, throwOnError: false })
-      : `[${math}]`; } catch(e) { return `[${math}]`; }
-  });
-  // 6. \(... \) y \[... \]
-  t = t.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => {
-    try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math.trim(), { displayMode: false, throwOnError: false })
-      : `[${math}]`; } catch(e) { return `[${math}]`; }
-  });
-  t = t.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => {
-    try { return typeof katex !== 'undefined'
-      ? katex.renderToString(math.trim(), { displayMode: true,  throwOnError: false })
-      : `[${math}]`; } catch(e) { return `[${math}]`; }
-  });
   return t;
 }
 
@@ -3327,10 +3917,13 @@ function slqRenderQuestion(h, elapsedSec) {
   // Render LaTeX in question text
   if (textEl) textEl.innerHTML = lqProcessText(h.text || '');
 
+  // Store current options for correct-answer reveal
+  slqCurrentOptions = h.options || [];
+
   // Render options with LaTeX
   const colors  = ['lq-opt-red','lq-opt-blue','lq-opt-yellow','lq-opt-green'];
   const letters = ['A','B','C','D'];
-  if (optsEl) optsEl.innerHTML = (h.options||[]).map((o, i) => `
+  if (optsEl) optsEl.innerHTML = slqCurrentOptions.map((o, i) => `
     <button class="lq-student-btn ${colors[i]}" onclick="slqAnswer(${i})" id="slq-btn-${i}">
       <span class="lq-btn-letter">${letters[i]}</span>
       <span class="lq-btn-text">${lqProcessText(o)}</span>
@@ -3456,6 +4049,46 @@ function lqParseQuestions(qRaw, aRaw) {
   }
   return qs;
 }
+
+function showStudentLiveSection() {
+  const overlay = document.getElementById('slq-modal-overlay');
+  const drawer  = document.getElementById('slq-modal-drawer');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  // Animate in
+  setTimeout(() => {
+    overlay.classList.remove('opacity-0');
+    overlay.classList.add('opacity-100');
+    if (drawer) {
+      drawer.classList.remove('scale-95');
+      drawer.classList.add('scale-100');
+    }
+  }, 10);
+  slqShow('slq-join');
+  const input = document.getElementById('slq-code-input');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 200);
+  }
+}
+
+function slqCloseModal() {
+  const overlay = document.getElementById('slq-modal-overlay');
+  const drawer  = document.getElementById('slq-modal-drawer');
+  if (!overlay) return;
+  overlay.classList.remove('opacity-100');
+  overlay.classList.add('opacity-0');
+  if (drawer) {
+    drawer.classList.remove('scale-100');
+    drawer.classList.add('scale-95');
+  }
+  setTimeout(() => overlay.classList.add('hidden'), 300);
+}
+
+// ── Variables globales para Quiz en Vivo (Segunda declaración para asegurar retrocompatibilidad) ──
+// ── (Usamos lqSessionCode como principal) ───────────────────────────
+// (Espacio reservado para la inicialización)
+
 // ── Inicialización global ───────────────────────────────────
 window.updateIcons = () => {
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -3467,7 +4100,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (savedTheme === 'light') toggleTheme();
   currentUser = JSON.parse(localStorage.getItem('currentUser'));
   if (currentUser) {
-    if (currentUser.role === 'admin') goView('view-admin');
-    else goView('view-student');
+    routeUser();
   }
 });
