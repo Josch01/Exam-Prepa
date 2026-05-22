@@ -505,6 +505,23 @@ async function handleRegister() {
   }
 }
 
+async function handleForgotPassword() {
+  const email = document.getElementById('forgot-pw-email').value.trim().toLowerCase();
+  if (!email) { toast('Por favor, ingresa tu correo electrónico.', 'error'); return; }
+
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://josch01.github.io/Exam-Prepa/'
+    });
+    if (error) throw error;
+    
+    toast('Revisa tu bandeja de entrada y tu carpeta de spam. Te hemos enviado un enlace para recuperar tu contraseña.', 'success');
+    closeModal('modal-forgot-pw');
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
 async function logout() {
   stopMessagePolling();
   currentUser = null;
@@ -3129,10 +3146,20 @@ async function openLeaderboardModal() {
 // ============================================================
 //  CAMBIAR CONTRASEÑA
 // ============================================================
-function openChangePasswordModal() {
+let isRecoveryMode = false;
+function openChangePasswordModal(recovery = false) {
+  isRecoveryMode = recovery === true;
   document.getElementById('pw-current').value = '';
   document.getElementById('pw-new').value = '';
   document.getElementById('pw-confirm').value = '';
+  
+  const currentPwContainer = document.getElementById('pw-current').parentElement;
+  if (isRecoveryMode) {
+    currentPwContainer.style.display = 'none';
+  } else {
+    currentPwContainer.style.display = 'block';
+  }
+  
   openModal('modal-change-pw');
 }
 
@@ -3141,13 +3168,21 @@ async function changePassword() {
   const newPass = document.getElementById('pw-new').value;
   const confirm = document.getElementById('pw-confirm').value;
 
-  if (!current || !newPass || !confirm) { toast('Completa todos los campos.', 'error'); return; }
+  if (!isRecoveryMode && !current) { toast('Completa todos los campos.', 'error'); return; }
+  if (!newPass || !confirm) { toast('Completa todos los campos.', 'error'); return; }
   if (newPass !== confirm) { toast('Las contraseñas nuevas no coinciden.', 'error'); return; }
   if (newPass.length < 6) { toast('La nueva contraseña debe tener al menos 6 caracteres.', 'error'); return; }
 
   try {
-    await api('PUT', '/api/auth/password', { current, newPass });
-    toast('✅ Contraseña cambiada exitosamente.', 'success');
+    if (isRecoveryMode) {
+      const { error } = await supabaseClient.auth.updateUser({ password: newPass });
+      if (error) throw error;
+      toast('🔒 Contraseña recuperada y cambiada exitosamente.', 'success');
+      isRecoveryMode = false;
+    } else {
+      await api('PUT', '/api/auth/password', { current, newPass });
+      toast('🔒 Contraseña cambiada exitosamente.', 'success');
+    }
     closeModal('modal-change-pw');
   } catch (e) {
     toast(e.message, 'error');
@@ -3353,9 +3388,21 @@ async function deleteAnnouncement(id) {
 }
 
 
+
 // ===== INIT =====
 async function init() {
   try {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        isRecoveryMode = true;
+        if (session) {
+          currentToken = session.access_token;
+          sessionStorage.setItem('examapp_token', currentToken);
+        }
+        openChangePasswordModal(true);
+      }
+    });
+
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session) {
       currentToken = session.access_token;
