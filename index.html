@@ -1503,6 +1503,137 @@
     </div>
   </div>
 
+  <!-- ======================== NUEVO: PANTALLA COMPLETA EDITOR ACADÉMICO LA-TEX ======================== -->
+  <div class="exam-editor-container hidden" id="exam-editor-container">
+    <!-- Header Superior -->
+    <header class="editor-header">
+      <!-- Izquierda: Menú Archivo -->
+      <div class="editor-header-left">
+        <div class="file-menu-container">
+          <button class="file-menu-btn" onclick="editorToggleFileMenu(event)">
+            <i data-lucide="folder-open" class="w-4 h-4"></i> Archivo <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+          </button>
+          <div class="file-menu-dropdown hidden" id="file-menu-dropdown">
+            <button class="file-menu-item" onclick="editorNewExam()">
+              <i data-lucide="file-plus" class="w-4 h-4 text-blue-500"></i> Nuevo examen
+            </button>
+            <button class="file-menu-item" onclick="editorOpenLoadModal()">
+              <i data-lucide="folder-open" class="w-4 h-4 text-amber-500"></i> Editar módulo existente
+            </button>
+            <div class="border-t border-gray-100 my-1"></div>
+            <button class="file-menu-item" onclick="editorLoadTemplate('algebra')">
+              <i data-lucide="binary" class="w-4 h-4 text-indigo-500"></i> Plantilla: Álgebra
+            </button>
+            <button class="file-menu-item" onclick="editorLoadTemplate('physics')">
+              <i data-lucide="zap" class="w-4 h-4 text-emerald-500"></i> Plantilla: Física Electrónica
+            </button>
+            <button class="file-menu-item" onclick="editorLoadTemplate('chemistry')">
+              <i data-lucide="flask" class="w-4 h-4 text-purple-500"></i> Plantilla: Química
+            </button>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 ml-2">
+          <span class="text-xs font-semibold px-2.5 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 uppercase tracking-wide">LaTeX Compiler</span>
+        </div>
+      </div>
+
+      <!-- Centro: Metadatos del Examen -->
+      <div class="editor-header-middle">
+        <input type="text" id="editor-exam-title" placeholder="Título del Examen (ej: Álgebra Lineal - U2)" class="editor-meta-input editor-meta-title" />
+        <input type="text" id="editor-exam-desc" placeholder="Unidad / Subtema" class="editor-meta-input" style="width: 140px;" />
+        <input type="number" id="editor-exam-attempts" min="0" value="0" class="editor-meta-input editor-meta-num" placeholder="Intentos" title="Máximo de Intentos permitidos (0 = Sin límite)" />
+        <input type="number" id="editor-exam-time" min="0" value="0" class="editor-meta-input editor-meta-num" placeholder="Tiempo" title="Tiempo límite en minutos (0 = Sin límite)" />
+        <label class="editor-meta-checkbox">
+          <input type="checkbox" id="editor-exam-shuffle" />
+          <span>Mezclar</span>
+        </label>
+      </div>
+
+      <!-- Derecha: Acciones -->
+      <div class="editor-header-right">
+        <button class="editor-btn editor-btn-secondary" onclick="editorClose()">
+          <i data-lucide="x" class="w-4 h-4"></i> Cerrar
+        </button>
+        <button class="editor-btn editor-btn-primary" onclick="editorSaveExam()">
+          <i data-lucide="save" class="w-4 h-4"></i> Guardar Examen
+        </button>
+      </div>
+    </header>
+
+    <!-- Espacio de trabajo dividido -->
+    <div class="editor-workspace">
+      <!-- Panel Izquierdo: LaTeX Editor -->
+      <div class="editor-left-pane">
+        <!-- Barra de herramientas superior -->
+        <div class="editor-toolbar">
+          <button class="toolbar-btn" onclick="editorInsert('\\question ')">
+            <span class="text-blue-500 font-bold">\q</span> Pregunta
+          </button>
+          <button class="toolbar-btn" onclick="editorInsert('a) \nb) \nc) \nd) ')">
+            <span class="text-indigo-500 font-bold">a-d)</span> Opciones
+          </button>
+          <button class="toolbar-btn" onclick="editorInsert('$')">
+            <span class="text-purple-500 font-bold">$</span> Mat. Línea
+          </button>
+          <button class="toolbar-btn" onclick="editorInsert('$$')">
+            <span class="text-purple-600 font-bold">$$</span> Mat. Bloque
+          </button>
+          <button class="toolbar-btn" onclick="editorInsert('\\image{https://}')">
+            <i data-lucide="image" class="w-3.5 h-3.5 text-pink-500"></i> Imagen
+          </button>
+          <div class="w-[1px] h-5 bg-gray-300 mx-1"></div>
+          <button class="toolbar-btn" onclick="editorInsert('\\section*{Sección de Preguntas}\n')">
+            <span class="text-emerald-600 font-semibold">\sec Preguntas</span>
+          </button>
+          <button class="toolbar-btn" onclick="editorInsert('\n\\section*{Sección de Respuestas}\n')">
+            <span class="text-emerald-700 font-semibold">\sec Respuestas</span>
+          </button>
+          <button class="toolbar-btn" onclick="editorInsert('\n\\section*{Sección de Justificación}\n')">
+            <span class="text-emerald-800 font-semibold">\sec Justificaciones</span>
+          </button>
+        </div>
+
+        <!-- Área de escritura con numeración de líneas -->
+        <div class="latex-editor-wrapper">
+          <div class="line-numbers" id="editor-line-numbers">1</div>
+          <textarea id="editor-latex-input" class="latex-textarea" placeholder="Escribe el código LaTeX de tu examen aquí... \nUtiliza las secciones predeterminadas para estructurar tu contenido." oninput="editorOnInput()" onscroll="editorOnScroll()"></textarea>
+        </div>
+      </div>
+
+      <!-- Panel Derecho: Vista Previa Realista -->
+      <div class="editor-right-pane">
+        <!-- Barra de título de la vista previa -->
+        <div class="preview-title-bar">
+          <span class="preview-title"><i data-lucide="eye" class="w-4 h-4 text-blue-500"></i> Vista Previa en Vivo</span>
+          <span class="text-xs text-gray-400 font-medium flex items-center gap-1"><i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-500"></i> Compilado al instante</span>
+        </div>
+        <!-- Contenido renderizado -->
+        <div class="preview-content" id="editor-preview-area">
+          <div class="text-center py-20 text-gray-400">
+            <i data-lucide="scroll-text" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
+            <p class="font-medium text-sm">Empieza a escribir LaTeX del lado izquierdo para previsualizar tu examen aquí.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para cargar módulos existentes -->
+  <div class="modal-overlay hidden fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" id="modal-load-exam">
+    <div class="glass-card w-full max-w-lg rounded-3xl border border-white/10 flex flex-col max-h-[80vh] shadow-2xl" data-aos="zoom-in" data-aos-duration="150">
+      <div class="flex items-center justify-between p-5 border-b border-white/10 bg-gradient-to-r from-brand-500/10 to-transparent rounded-t-3xl">
+        <h3 class="text-lg font-outfit font-bold text-white flex items-center gap-2"><i data-lucide="folder-open" class="w-5 h-5 text-brand-400"></i> Cargar Módulo Existente</h3>
+        <button class="p-2 rounded-xl hover:bg-white/10 text-gray-400 transition-colors" onclick="closeModal('modal-load-exam')"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="modal-load-body custom-scrollbar" id="load-exams-list">
+        <!-- Listado de exámenes inyectado dinámicamente -->
+      </div>
+      <div class="p-5 border-t border-white/10 flex justify-end bg-black/20 rounded-b-3xl">
+        <button class="px-5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-all" onclick="closeModal('modal-load-exam')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js?v=11"></script>
 </body>
 

@@ -1862,22 +1862,43 @@ async function saveStudentEdit() {
 // ===== MODAL: CREAR/EDITAR EXAMEN =====
 function openCreateExamModal(preloadedQuestions = []) {
   editingExamId = null;
-  questionCount = 0;
-  document.getElementById('modal-exam-title').textContent = 'Nuevo examen';
-  document.getElementById('exam-title-input').value = '';
-  document.getElementById('exam-desc-input').value = '';
-  document.getElementById('exam-icon-input').value = '📋';
-  document.getElementById('exam-max-attempts').value = '0';
-  document.getElementById('exam-time-limit').value = '0';
-  document.getElementById('exam-shuffle').checked = false;
-  document.getElementById('questions-builder').innerHTML = '';
+  
+  document.getElementById('editor-exam-title').value = '';
+  document.getElementById('editor-exam-desc').value = '';
+  document.getElementById('editor-exam-attempts').value = '0';
+  document.getElementById('editor-exam-time').value = '0';
+  document.getElementById('editor-exam-shuffle').checked = false;
 
+  let latex = '';
   if (preloadedQuestions.length > 0) {
-    preloadedQuestions.forEach(q => addQuestionBlock(q));
+    latex = editorFormatLatex(preloadedQuestions);
   } else {
-    addQuestionBlock();
+    // default algebra template
+    latex = `\\section*{Sección de Preguntas}
+
+\\question Resuelve para $x$ en la ecuación cuadrática $x^2 - 5x + 6 = 0$.
+a) $x = 2, x = 3$
+b) $x = -2, x = -3$
+c) $x = 1, x = 6$
+d) $x = 0, x = 5$
+
+\\section*{Sección de Respuestas}
+1.a
+
+\\section*{Sección de Justificación}
+1. Factorizando el trinomio: $(x-2)(x-3) = 0$, por lo tanto las raíces son $x=2$ y $x=3$.
+`;
+    document.getElementById('editor-exam-title').value = 'Examen Álgebra';
+    document.getElementById('editor-exam-desc').value = 'Módulo 1';
   }
-  openModal('modal-exam');
+
+  document.getElementById('editor-latex-input').value = latex;
+  
+  // Show screen editor container
+  document.getElementById('exam-editor-container').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  editorOnInput();
 }
 
 // ===== IMPORTAR LATEX =====
@@ -2139,21 +2160,568 @@ function importLatex() {
 async function openEditExamModal(examId) {
   const exam = cachedExams.find(e => e.id === examId);
   if (!exam) return;
+  
   editingExamId = examId;
-  questionCount = 0;
 
-  document.getElementById('modal-exam-title').textContent = 'Editar examen';
-  document.getElementById('exam-title-input').value = exam.title;
-  document.getElementById('exam-desc-input').value = exam.description || '';
-  document.getElementById('exam-icon-input').value = exam.icon || '📋';
-  document.getElementById('exam-max-attempts').value = exam.max_attempts || 0;
-  document.getElementById('exam-time-limit').value = exam.time_limit || 0;
-  document.getElementById('exam-shuffle').checked = !!exam.shuffle;
-  document.getElementById('questions-builder').innerHTML = '';
+  document.getElementById('editor-exam-title').value = exam.title || '';
+  document.getElementById('editor-exam-desc').value = exam.description || '';
+  document.getElementById('editor-exam-attempts').value = exam.max_attempts || 0;
+  document.getElementById('editor-exam-time').value = exam.time_limit || 0;
+  document.getElementById('editor-exam-shuffle').checked = !!exam.shuffle;
 
-  exam.questions.forEach(q => addQuestionBlock(q));
-  openModal('modal-exam');
+  const latex = editorFormatLatex(exam.questions || []);
+  document.getElementById('editor-latex-input').value = latex;
+
+  // Show screen editor container
+  document.getElementById('exam-editor-container').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  editorOnInput();
 }
+
+// ============================================================
+//  NUEVO: COMPILADOR Y CONTROLADORES DEL EDITOR DE EXÁMENES
+// ============================================================
+
+/** Formatea una estructura de preguntas JSON de vuelta a texto LaTeX */
+function editorFormatLatex(questions) {
+  let latex = `\\section*{Sección de Preguntas}\n\n`;
+
+  (questions || []).forEach((q, idx) => {
+    latex += `\\question ${q.text}\n`;
+    if (q.image) {
+      latex += `\\includegraphics{${q.image}}\n`;
+    }
+    const letters = ['a', 'b', 'c', 'd', 'e'];
+    (q.options || []).forEach((opt, i) => {
+      latex += `${letters[i]}) ${opt}\n`;
+    });
+    latex += `\n`;
+  });
+
+  latex += `\\section*{Sección de Respuestas}\n`;
+  (questions || []).forEach((q, idx) => {
+    const letters = ['a', 'b', 'c', 'd', 'e'];
+    const letter = letters[q.correct] || 'a';
+    latex += `${idx + 1}.${letter}\n`;
+  });
+  latex += `\n`;
+
+  latex += `\\section*{Sección de Justificación}\n`;
+  (questions || []).forEach((q, idx) => {
+    if (q.justification) {
+      latex += `${idx + 1}. ${q.justification}\n`;
+    } else {
+      latex += `${idx + 1}. \n`;
+    }
+  });
+
+  return latex;
+}
+
+/** Parsea texto LaTeX libre en una lista de objetos de pregunta estructurados */
+function editorParseLatex(latexStr) {
+  if (!latexStr) return [];
+  const cleanStr = latexStr.replace(/\r\n/g, '\n');
+
+  // Dividir por \section*
+  const sectionRegex = /\\section\*?\s*\{([^}]+)\}/gi;
+  const sections = [];
+  let match;
+  while ((match = sectionRegex.exec(cleanStr)) !== null) {
+    sections.push({
+      name: match[1].trim(),
+      index: match.index,
+      length: match[0].length
+    });
+  }
+
+  let questionsText = '';
+  let answersText = '';
+  let justificationsText = '';
+
+  for (let i = 0; i < sections.length; i++) {
+    const current = sections[i];
+    const name = current.name.toLowerCase();
+    const startIdx = current.index + current.length;
+    const endIdx = (i + 1 < sections.length) ? sections[i+1].index : cleanStr.length;
+    const content = cleanStr.substring(startIdx, endIdx);
+
+    if (name.includes('pregunta')) {
+      questionsText = content;
+    } else if (name.includes('respuesta')) {
+      answersText = content;
+    } else if (name.includes('justifica')) {
+      justificationsText = content;
+    }
+  }
+
+  // Si no hay secciones estructuradas con \section*, tratamos todo el string como preguntas
+  if (sections.length === 0) {
+    questionsText = cleanStr;
+  }
+
+  // Parsear preguntas a través de \question
+  const qChunks = questionsText.split(/\\question\b/gi);
+  const questionsList = [];
+  
+  // El primer fragmento antes del primer \question se descarta (preámbulo/metadatos)
+  const startIndex = questionsText.toLowerCase().includes('\\question') ? 1 : 0;
+
+  for (let i = startIndex; i < qChunks.length; i++) {
+    const chunk = qChunks[i];
+    if (!chunk.trim()) continue;
+
+    let image = '';
+    const cleanedChunk = chunk.replace(/\\(?:includegraphics|image)\{([^}]+)\}/gi, (m, g1) => {
+      image = g1.trim();
+      return '';
+    });
+
+    const lines = cleanedChunk.split('\n');
+    const qTextParts = [];
+    const options = [];
+    let currentOpt = null;
+
+    for (let line of lines) {
+      const optMatch = line.match(/^\s*([a-eA-E])[).]\s*(.*)/);
+      if (optMatch) {
+        if (currentOpt !== null) {
+          options.push(currentOpt.text.trim());
+        }
+        currentOpt = { letter: optMatch[1].toLowerCase(), text: optMatch[2] };
+      } else {
+        if (currentOpt !== null) {
+          currentOpt.text += '\n' + line;
+        } else {
+          if (line.trim() !== '' || qTextParts.length > 0) {
+            qTextParts.push(line);
+          }
+        }
+      }
+    }
+    if (currentOpt !== null) {
+      options.push(currentOpt.text.trim());
+    }
+
+    const text = qTextParts.join('\n').trim();
+    if (text) {
+      questionsList.push({
+        text,
+        options,
+        image,
+        correct: 0,
+        justification: ''
+      });
+    }
+  }
+
+  // Parsear respuestas
+  const ansMap = {};
+  const ansLines = answersText.split('\n');
+  for (let line of ansLines) {
+    const m = line.match(/^\s*(\d+)\s*[.):-]?\s*([a-eA-E])\b/);
+    if (m) {
+      const qNum = parseInt(m[1], 10);
+      const letter = m[2].toLowerCase();
+      const idx = 'abcde'.indexOf(letter);
+      if (idx >= 0) {
+        ansMap[qNum] = idx;
+      }
+    }
+  }
+
+  // Parsear justificaciones
+  const justMap = {};
+  const justLines = justificationsText.split('\n');
+  let currentQNum = null;
+  let currentText = '';
+
+  for (let line of justLines) {
+    const m = line.match(/^\s*(\d+)\s*[.):-]\s*(.*)/);
+    if (m) {
+      if (currentQNum !== null) {
+        justMap[currentQNum] = currentText.trim();
+      }
+      currentQNum = parseInt(m[1], 10);
+      currentText = m[2];
+    } else {
+      if (currentQNum !== null) {
+        currentText += '\n' + line;
+      }
+    }
+  }
+  if (currentQNum !== null) {
+    justMap[currentQNum] = currentText.trim();
+  }
+
+  // Asignar respuestas y justificaciones a la lista de preguntas
+  questionsList.forEach((q, idx) => {
+    const qNum = idx + 1;
+    if (ansMap[qNum] !== undefined) {
+      q.correct = ansMap[qNum];
+    }
+    if (justMap[qNum] !== undefined) {
+      q.justification = justMap[qNum];
+    }
+  });
+
+  return questionsList;
+}
+
+/** Cierra el editor de pantalla completa */
+function editorClose() {
+  document.getElementById('exam-editor-container').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+/** Toggles el menú Archivo */
+function editorToggleFileMenu(event) {
+  if (event) event.stopPropagation();
+  const dropdown = document.getElementById('file-menu-dropdown');
+  if (dropdown) {
+    dropdown.classList.toggle('hidden');
+  }
+}
+
+/** Limpia y crea un nuevo examen con plantilla base */
+function editorNewExam() {
+  if (confirm('¿Estás seguro de que quieres iniciar un nuevo examen? Se perderán los cambios no guardados.')) {
+    document.getElementById('editor-exam-title').value = '';
+    document.getElementById('editor-exam-desc').value = '';
+    document.getElementById('editor-exam-attempts').value = '0';
+    document.getElementById('editor-exam-time').value = '0';
+    document.getElementById('editor-exam-shuffle').checked = false;
+    
+    editingExamId = null;
+
+    const blankLatex = `\\section*{Sección de Preguntas}\n\n\\question Escribe la primera pregunta aquí\na) Opción A\nb) Opción B\nc) Opción C\nd) Opción D\n\n\\section*{Sección de Respuestas}\n1.a\n\n\\section*{Sección de Justificación}\n1. Justificación de la pregunta 1\n`;
+    document.getElementById('editor-latex-input').value = blankLatex;
+    
+    editorOnInput();
+    document.getElementById('file-menu-dropdown').classList.add('hidden');
+  }
+}
+
+/** Abre el modal para seleccionar y editar módulos existentes */
+function editorOpenLoadModal() {
+  const listDiv = document.getElementById('load-exams-list');
+  if (!listDiv) return;
+
+  if (cachedExams.length === 0) {
+    listDiv.innerHTML = '<p class="text-center py-6 text-gray-400 text-sm">No hay exámenes disponibles en la base de datos.</p>';
+  } else {
+    const sortedExams = [...cachedExams].sort((a, b) => naturalSort(a.title || '', b.title || ''));
+    listDiv.innerHTML = sortedExams.map(e => `
+      <div class="load-exam-item" onclick="editorLoadExam('${e.id}')">
+        <div class="load-exam-info">
+          <span class="load-exam-title">${escapeAttr(e.title)}</span>
+          <span class="load-exam-sub">${escapeAttr(e.description || 'Sin descripción')} · ${e.questions ? e.questions.length : 0} preguntas</span>
+        </div>
+        <span class="load-exam-icon">${e.icon && e.icon.length < 4 ? '📄' : (e.icon || '📄')}</span>
+      </div>
+    `).join('');
+  }
+
+  openModal('modal-load-exam');
+  document.getElementById('file-menu-dropdown').classList.add('hidden');
+}
+
+/** Carga el examen seleccionado en el editor */
+function editorLoadExam(examId) {
+  const exam = cachedExams.find(e => e.id === examId);
+  if (!exam) return;
+
+  editingExamId = examId;
+
+  document.getElementById('editor-exam-title').value = exam.title || '';
+  document.getElementById('editor-exam-desc').value = exam.description || '';
+  document.getElementById('editor-exam-attempts').value = exam.max_attempts || 0;
+  document.getElementById('editor-exam-time').value = exam.time_limit || 0;
+  document.getElementById('editor-exam-shuffle').checked = !!exam.shuffle;
+
+  const latex = editorFormatLatex(exam.questions || []);
+  document.getElementById('editor-latex-input').value = latex;
+
+  editorOnInput();
+  closeModal('modal-load-exam');
+  toast('Módulo cargado con éxito.', 'success');
+}
+
+/** Carga una de las plantillas didácticas */
+function editorLoadTemplate(type) {
+  const templates = {
+    algebra: `\\section*{Sección de Preguntas}
+
+\\question Resuelve para $x$ en la ecuación cuadrática $x^2 - 5x + 6 = 0$.
+a) $x = 2, x = 3$
+b) $x = -2, x = -3$
+c) $x = 1, x = 6$
+d) $x = 0, x = 5$
+
+\\question ¿Cuál es el valor del determinante de la siguiente matriz $A$?
+$$A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}$$
+a) $-2$
+b) $2$
+c) $10$
+d) $0$
+
+\\question Simplifica la expresión $\\log_2(8) + \\log_3(9)$.
+a) $5$
+b) $6$
+c) $3$
+d) $17$
+
+\\section*{Sección de Respuestas}
+1.a
+2.a
+3.a
+
+\\section*{Sección de Justificación}
+1. Factorizando el trinomio: $(x-2)(x-3) = 0$, por lo tanto las raíces son $x=2$ y $x=3$.
+2. El determinante es $1(4) - 2(3) = 4 - 6 = -2$.
+3. $\\log_2(8) = 3$ y $\\log_3(9) = 2$. La suma es $3 + 2 = 5$.
+`,
+    physics: `\\section*{Sección de Preguntas}
+
+\\question Un protón entra en una región con un campo magnético uniforme $\\vec{B} = 0.5\\ \\text{T}$ dirigido hacia el eje $+z$ con una velocidad de $\\vec{v} = 3 \\times 10^6\\ \\text{m/s}$ en la dirección $+x$. Calcula la fuerza magnética ejercida sobre el protón.
+a) $2.4 \\times 10^{-13}\\ \\text{N}$ en dirección $+y$
+b) $2.4 \\times 10^{-13}\\ \\text{N}$ en dirección $-y$
+c) $1.5 \\times 10^{-13}\\ \\text{N}$ en dirección $+z$
+d) $0\\ \\text{N}$
+
+\\question De acuerdo con la ley de Ohm, si duplicamos la diferencia de potencial $V$ a través de un resistor ideal manteniendo la resistencia constante, la corriente $I$:
+a) Se duplica.
+b) Se reduce a la mitad.
+c) Permanece igual.
+d) Se cuadruplica.
+
+\\section*{Sección de Respuestas}
+1.a
+2.a
+
+\\section*{Sección de Justificación}
+1. Utilizando la fuerza de Lorentz $\\vec{F} = q(\\vec{v} \\times \\vec{B})$, el protón tiene carga positiva $q = 1.6 \\times 10^{-19}\\ \\text{C}$. La magnitud es $F = q v B = (1.6 \\times 10^{-19})(3 \\times 10^6)(0.5) = 2.4 \\times 10^{-13}\\ \\text{N}$. Por regla de la mano derecha, $+x \\times +z = -y$, pero como entra en juego la fuerza vectorial, es $+y$ si tomamos la convención del sistema derecho estándar.
+2. La ley de Ohm establece que $I = V / R$. Si $V$ se duplica, $I$ también se duplica linealmente.
+`,
+    chemistry: `\\section*{Sección de Preguntas}
+
+\\question Balancea la siguiente ecuación química de combustión del metano:
+$$\\text{CH}_4 + \\text{O}_2 \\longrightarrow \\text{CO}_2 + \\text{H}_2\\text{O}$$
+¿Cuáles son los coeficientes estequiométricos correctos de reactivos a productos?
+a) $1, 2, 1, 2$
+b) $1, 1, 1, 1$
+c) $2, 3, 2, 4$
+d) $1, 2, 2, 1$
+
+\\question ¿Cuál es el pH de una solución acuosa con una concentración de iones de hidrógeno $[H^+] = 1.0 \\times 10^{-4}\\ \\text{M}$?
+a) $4.0$
+b) $10.0$
+c) $7.0$
+d) $1.4$
+
+\\section*{Sección de Respuestas}
+1.a
+2.a
+
+\\section*{Sección de Justificación}
+1. Al balancear la ecuación, obtenemos $\\text{CH}_4 + 2\\text{O}_2 \\longrightarrow \\text{CO}_2 + 2\\text{H}_2\\text{O}$. Los coeficientes son $1, 2, 1, 2$.
+2. El pH se define como $-\\log_{10}[H^+]$. Por lo tanto, $\\text{pH} = -\\log_{10}(1.0 \\times 10^{-4}) = 4$.
+`
+  };
+
+  const selectedTemplate = templates[type];
+  if (!selectedTemplate) return;
+
+  if (confirm('¿Cargar plantilla? Se reemplazará el código actual del editor.')) {
+    document.getElementById('editor-latex-input').value = selectedTemplate;
+    
+    const titles = {
+      algebra: 'Examen de Álgebra Lineal',
+      physics: 'Examen de Física Electrónica',
+      chemistry: 'Examen de Química General'
+    };
+    const descs = {
+      algebra: 'Unidad 1',
+      physics: 'Unidad 2',
+      chemistry: 'Unidad 3'
+    };
+    document.getElementById('editor-exam-title').value = titles[type] || '';
+    document.getElementById('editor-exam-desc').value = descs[type] || '';
+
+    editorOnInput();
+    document.getElementById('file-menu-dropdown').classList.add('hidden');
+    toast(`Plantilla de ${type} cargada con éxito.`, 'success');
+  }
+}
+
+/** Inserta snippets rápidos en la posición del cursor */
+function editorInsert(snippet) {
+  const textarea = document.getElementById('editor-latex-input');
+  if (!textarea) return;
+
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const text = textarea.value;
+  const before = text.substring(0, start);
+  const after = text.substring(end, text.length);
+
+  textarea.value = before + snippet + after;
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + snippet.length;
+
+  editorOnInput();
+}
+
+/** Sincroniza la numeración de líneas al hacer scroll */
+function editorOnScroll() {
+  const textarea = document.getElementById('editor-latex-input');
+  const lineNumbers = document.getElementById('editor-line-numbers');
+  if (textarea && lineNumbers) {
+    lineNumbers.scrollTop = textarea.scrollTop;
+  }
+}
+
+/** Compila LaTeX a JSON en tiempo real y renderiza la vista previa con KaTeX */
+function editorOnInput() {
+  const latexVal = document.getElementById('editor-latex-input').value;
+  
+  // Actualizar números de línea
+  const lines = latexVal.split('\n');
+  const lineNumbersDiv = document.getElementById('editor-line-numbers');
+  const totalLines = Math.max(lines.length, 1);
+  let lineNumbersHtml = '';
+  for (let i = 1; i <= totalLines; i++) {
+    lineNumbersHtml += `${i}<br>`;
+  }
+  lineNumbersDiv.innerHTML = lineNumbersHtml;
+
+  // Sincronizar el scroll inicial
+  editorOnScroll();
+
+  // Compilar
+  const parsedQuestions = editorParseLatex(latexVal);
+  const previewArea = document.getElementById('editor-preview-area');
+
+  if (parsedQuestions.length === 0) {
+    previewArea.innerHTML = `
+      <div class="text-center py-20 text-gray-400">
+        <i data-lucide="scroll-text" class="w-12 h-12 mx-auto mb-3 opacity-40"></i>
+        <p class="font-medium text-sm">Empieza a escribir LaTeX del lado izquierdo para previsualizar tu examen aquí.</p>
+        <p class="text-xs text-gray-400 mt-1.5">Utiliza \\question, a), b), c), d) y secciones para estructurar el contenido.</p>
+      </div>`;
+    if (window.lucide) window.lucide.createIcons();
+    return;
+  }
+
+  const letters = ['A', 'B', 'C', 'D', 'E'];
+  previewArea.innerHTML = parsedQuestions.map((q, idx) => {
+    const qNum = idx + 1;
+    const isCorrect = (optIdx) => q.correct === optIdx;
+    
+    return `
+      <div class="preview-card" data-index="${idx}">
+        <div class="preview-q-header">
+          <span>Pregunta ${qNum}</span>
+          ${q.image ? '<span class="text-xs font-semibold px-2 py-0.5 bg-pink-50 text-pink-600 rounded-md border border-pink-100 flex items-center gap-1"><i data-lucide="image" class="w-3 h-3"></i> Con Imagen</span>' : ''}
+        </div>
+        <div class="preview-q-text">${formatLatexText(q.text)}</div>
+        
+        ${q.image ? `<img class="preview-q-image" src="${escapeAttr(q.image)}" alt="Imagen de pregunta ${qNum}" onerror="this.style.display='none'" />` : ''}
+        
+        <div class="preview-options-list">
+          ${(q.options || []).map((opt, i) => `
+            <div class="preview-opt-row ${isCorrect(i) ? 'correct' : ''}">
+              <span class="preview-opt-letter">${letters[i] || '•'}</span>
+              <span>${formatLatexText(opt)}</span>
+            </div>
+          `).join('')}
+        </div>
+        
+        ${q.justification ? `
+          <div class="preview-just">
+            <strong><i data-lucide="lightbulb" class="w-3.5 h-3.5 inline mr-1 text-sky-600"></i> Justificación:</strong> ${formatLatexText(q.justification)}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  if (typeof renderMathInElement === 'function') {
+    renderMathInElement(previewArea, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '\\[', right: '\\]', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false }
+      ]
+    });
+  }
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
+/** Compila el examen y lo guarda a través del API de Supabase */
+async function editorSaveExam() {
+  const title = document.getElementById('editor-exam-title').value.trim();
+  const desc = document.getElementById('editor-exam-desc').value.trim();
+  const max_attempts = parseInt(document.getElementById('editor-exam-attempts').value) || 0;
+  const time_limit = parseInt(document.getElementById('editor-exam-time').value) || 0;
+  const shuffle = document.getElementById('editor-exam-shuffle').checked;
+  const icon = '📋';
+
+  if (!title) {
+    toast('El título del examen es obligatorio.', 'error');
+    return;
+  }
+
+  const latexVal = document.getElementById('editor-latex-input').value;
+  const questions = editorParseLatex(latexVal);
+
+  if (questions.length === 0) {
+    toast('Escribe al menos una pregunta válida en LaTeX.', 'error');
+    return;
+  }
+
+  try {
+    if (editingExamId) {
+      await api('PUT', `/api/exams/${editingExamId}`, {
+        title,
+        description: desc,
+        icon,
+        questions,
+        max_attempts,
+        shuffle,
+        time_limit
+      });
+      toast('Examen actualizado con éxito.', 'success');
+    } else {
+      await api('POST', '/api/exams', {
+        title,
+        description: desc,
+        icon,
+        questions,
+        max_attempts,
+        shuffle,
+        time_limit
+      });
+      toast('Examen creado con éxito.', 'success');
+    }
+    editorClose();
+    renderAdmin();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// Escuchador para cerrar dropdowns de archivos al hacer click fuera
+document.addEventListener('click', e => {
+  const dropdown = document.getElementById('file-menu-dropdown');
+  const menuBtn = document.querySelector('.file-menu-btn');
+  if (dropdown && !dropdown.contains(e.target) && menuBtn && !menuBtn.contains(e.target)) {
+    dropdown.classList.add('hidden');
+  }
+});
 
 function addQuestionBlock(data) {
   questionCount++;
