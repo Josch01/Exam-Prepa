@@ -3317,6 +3317,8 @@ let lqAnswersThisRound = {};
 let lqQuestionStart = 0;
 let lqIsHost = false;
 let lqPhase  = 'idle';
+let lqAutoMode  = false;
+let lqAutoNextTimeout = null;
 
 let slqMyEmail   = '';
 let slqMyName    = '';
@@ -3488,6 +3490,7 @@ async function lqStartSession() {
   lqQuestions = lqParseQuestions(qRaw, aRaw);
   if (!lqQuestions.length) { toast('No se detectaron preguntas válidas.', 'error'); return; }
   lqTimeSec     = parseInt(document.getElementById('lq-time').value) || 20;
+  lqAutoMode    = document.getElementById('lq-auto')?.checked || false;
   lqSessionCode = lqGenCode();
   lqIsHost = true;
   lqPlayers = {};
@@ -3534,6 +3537,17 @@ async function lqStartSession() {
       type: 'broadcast', event: 'answer_result',
       payload: { email: payload.email, correct, pts, correctIdx: q.correct }
     });
+
+    // Autodetectar si todos los alumnos han contestado
+    const totalPlayers = Object.keys(lqPlayers).length;
+    if (totalPlayers > 0 && answered >= totalPlayers) {
+      clearInterval(lqTimerInterval);
+      setTimeout(() => {
+        if (lqPhase === 'question') {
+          lqTimeUp();
+        }
+      }, 600); // Pequeña demora para asegurar que se entreguen las respuestas finales
+    }
   });
 
   await lqChannel.subscribe(async (status) => {
@@ -3604,7 +3618,7 @@ function lqShowHostQuestion() {
   // ── Después actualizar UI del profesor ──
   const qCounter = document.getElementById('lq-q-counter');
   const qText    = document.getElementById('lq-host-question');
-  const qOpts    = document.getElementById('lq-host-opts');
+  const qOpts    = document.getElementById('lq-host-options') || document.getElementById('lq-host-opts');
   const qAns     = document.getElementById('lq-answered-count');
   const scoreMid = document.getElementById('lq-scoreboard-mid');
   const nextBtn  = document.getElementById('lq-next-btn');
@@ -3621,6 +3635,18 @@ function lqShowHostQuestion() {
     try { return `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${lqProcessText(o)}</div>`; }
     catch(e) { return `<div class="lq-host-opt ${colors[i]}">${letters[i]}) ${o}</div>`; }
   }).join('');
+
+  // RENDER MATH IN ELEMENT FAIL-SAFE FOR HOST
+  if (typeof renderMathInElement === 'function') {
+    const delimiters = [
+      { left: '$$', right: '$$', display: true },
+      { left: '$', right: '$', display: false },
+      { left: '\\(', right: '\\)', display: false },
+      { left: '\\[', right: '\\]', display: true }
+    ];
+    if (qText) renderMathInElement(qText, { delimiters });
+    if (qOpts) renderMathInElement(qOpts, { delimiters });
+  }
 
   // Temporizador del host
   let t = lqTimeSec;
@@ -3653,19 +3679,52 @@ function lqTimeUp() {
   if (midEl)   midEl.classList.remove('hidden');
   if (nextBtn) nextBtn.innerHTML =
     lqCurrentQ + 1 < lqQuestions.length ? 'Siguiente pregunta →' : '<i data-lucide="trophy" class="icon-sm"></i> Ver ganador';
+
+  // Si está activo el modo automático, transitar a la siguiente pregunta tras 5 segundos
+  if (lqAutoMode) {
+    if (lqAutoNextTimeout) clearTimeout(lqAutoNextTimeout);
+    lqAutoNextTimeout = setTimeout(() => {
+      lqNextQuestion();
+    }, 5000);
+  }
 }
 
 function lqNextQuestion() {
   if (lqPhase === 'question') { clearInterval(lqTimerInterval); lqTimeUp(); return; }
+  if (lqAutoNextTimeout) { clearTimeout(lqAutoNextTimeout); lqAutoNextTimeout = null; }
+  
   lqCurrentQ++;
   if (lqCurrentQ >= lqQuestions.length) { lqEndQuiz(); return; }
-  lqPhase = 'question';
+  
+  // Fase de transición para mostrar la tabla de posiciones de manera limpia
+  lqPhase = 'transition';
   const midEl = document.getElementById('lq-scoreboard-mid');
-  if (midEl) midEl.classList.add('hidden');
-  lqShowHostQuestion();
+  if (midEl) midEl.classList.remove('hidden');
+  
+  // Forzar a los alumnos a mostrar la tabla de posiciones instantáneamente sin demoras
+  const scores = Object.values(lqPlayers).map(p => ({ name: p.name, score: p.score }));
+  lqChannel.track({ type: 'host', phase: 'scores', scores, correctIdx: -1 });
+  lqChannel.send({ type: 'broadcast', event: 'scores', payload: { scores, correctIdx: -1 } });
+  
+  const nextBtn = document.getElementById('lq-next-btn');
+  if (nextBtn) {
+    nextBtn.disabled = true;
+    nextBtn.textContent = 'Preparando pregunta...';
+  }
+  
+  setTimeout(() => {
+    lqPhase = 'question';
+    if (midEl) midEl.classList.add('hidden');
+    if (nextBtn) {
+      nextBtn.disabled = false;
+      nextBtn.textContent = 'Ver respuestas →';
+    }
+    lqShowHostQuestion();
+  }, 2000);
 }
 
 function lqEndQuiz() {
+  if (lqAutoNextTimeout) { clearTimeout(lqAutoNextTimeout); lqAutoNextTimeout = null; }
   lqPhase = 'final';
   const scores = Object.values(lqPlayers).map(p => ({ name: p.name, score: p.score }));
   lqChannel.track({ type: 'host', phase: 'final', scores });
@@ -3678,11 +3737,13 @@ function lqEndQuiz() {
 function lqAbortQuiz() {
   if (!confirm('¿Terminar el quiz antes de que termine?')) return;
   clearInterval(lqTimerInterval);
+  if (lqAutoNextTimeout) { clearTimeout(lqAutoNextTimeout); lqAutoNextTimeout = null; }
   lqEndQuiz();
 }
 
 function lqReset() {
   clearInterval(lqTimerInterval);
+  if (lqAutoNextTimeout) { clearTimeout(lqAutoNextTimeout); lqAutoNextTimeout = null; }
   if (lqChannel) { supabaseClient.removeChannel(lqChannel); lqChannel = null; }
   lqPhase = 'idle'; lqPlayers = {}; lqCurrentQ = 0; lqIsHost = false;
   lqShow('live-setup');
@@ -3715,6 +3776,10 @@ async function slqJoin() {
     const h = hostArr[0];
 
     if (h.phase === 'question') {
+      if (window.slqScoreboardTimeout) {
+        clearTimeout(window.slqScoreboardTimeout);
+        window.slqScoreboardTimeout = null;
+      }
       const qIdx = h.questionIdx ?? 0;
       if (qIdx !== slqLastQuestionIdx) {
         slqAnswered = false;
@@ -3728,10 +3793,26 @@ async function slqJoin() {
       }
     } else if (h.phase === 'scores') {
       clearInterval(slqTimerInterval);
-      slqRevealCorrectAnswer(h.correctIdx ?? -1);
-      setTimeout(() => { slqShow('slq-scoreboard'); lqRenderScoreRows('slq-score-rows', h.scores || []); }, 2200);
+      if (window.slqScoreboardTimeout) {
+        clearTimeout(window.slqScoreboardTimeout);
+        window.slqScoreboardTimeout = null;
+      }
+      if (h.correctIdx === -1) {
+        slqShow('slq-scoreboard');
+        lqRenderScoreRows('slq-score-rows', h.scores || []);
+      } else {
+        slqRevealCorrectAnswer(h.correctIdx ?? -1);
+        window.slqScoreboardTimeout = setTimeout(() => {
+          slqShow('slq-scoreboard');
+          lqRenderScoreRows('slq-score-rows', h.scores || []);
+        }, 2200);
+      }
     } else if (h.phase === 'final') {
       clearInterval(slqTimerInterval);
+      if (window.slqScoreboardTimeout) {
+        clearTimeout(window.slqScoreboardTimeout);
+        window.slqScoreboardTimeout = null;
+      }
       lqSound('final');
       slqShow('slq-final');
       lqRenderPodium('slq-final-podium', h.scores || []);
@@ -3744,6 +3825,10 @@ async function slqJoin() {
   // ── Broadcast: el host envía una pregunta (respaldo inmediato) ──────────
   slqChannel.on('broadcast', { event: 'question' }, ({ payload: h }) => {
     if (!h) return;
+    if (window.slqScoreboardTimeout) {
+      clearTimeout(window.slqScoreboardTimeout);
+      window.slqScoreboardTimeout = null;
+    }
     const qIdx = h.questionIdx ?? 0;
     if (qIdx !== slqLastQuestionIdx) {
       slqAnswered = false;
@@ -3760,13 +3845,29 @@ async function slqJoin() {
   slqChannel.on('broadcast', { event: 'scores' }, ({ payload: d }) => {
     if (!d) return;
     clearInterval(slqTimerInterval);
-    slqRevealCorrectAnswer(d.correctIdx ?? -1);
-    setTimeout(() => { slqShow('slq-scoreboard'); lqRenderScoreRows('slq-score-rows', d.scores || []); }, 2200);
+    if (window.slqScoreboardTimeout) {
+      clearTimeout(window.slqScoreboardTimeout);
+      window.slqScoreboardTimeout = null;
+    }
+    if (d.correctIdx === -1) {
+      slqShow('slq-scoreboard');
+      lqRenderScoreRows('slq-score-rows', d.scores || []);
+    } else {
+      slqRevealCorrectAnswer(d.correctIdx ?? -1);
+      window.slqScoreboardTimeout = setTimeout(() => {
+        slqShow('slq-scoreboard');
+        lqRenderScoreRows('slq-score-rows', d.scores || []);
+      }, 2200);
+    }
   });
 
   slqChannel.on('broadcast', { event: 'final' }, ({ payload: d }) => {
     if (!d) return;
     clearInterval(slqTimerInterval);
+    if (window.slqScoreboardTimeout) {
+      clearTimeout(window.slqScoreboardTimeout);
+      window.slqScoreboardTimeout = null;
+    }
     lqSound('final');
     slqShow('slq-final');
     lqRenderPodium('slq-final-podium', d.scores || []);
@@ -3804,6 +3905,15 @@ async function slqJoin() {
       if (rev && text) {
         text.innerHTML = lqProcessText(correctText);
         rev.classList.remove('hidden');
+        if (typeof renderMathInElement === 'function') {
+          const delimiters = [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ];
+          renderMathInElement(text, { delimiters });
+        }
       }
     }
   });
@@ -3862,8 +3972,8 @@ function lqProcessText(raw) {
   t = t.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => {
     const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, false)); return placeholder(idx);
   });
-  // $ ... $   inline math (single dollar, skip newlines)
-  t = t.replace(/\$([^$\n]+?)\$/g, (_, math) => {
+  // $ ... $   inline math (single dollar)
+  t = t.replace(/\$([^\$]+?)\$/g, (_, math) => {
     const idx = mathBlocks.length; mathBlocks.push(renderKatex(math, false)); return placeholder(idx);
   });
 
@@ -3939,6 +4049,18 @@ function slqRenderQuestion(h, elapsedSec) {
       <span class="lq-btn-text">${lqProcessText(o)}</span>
     </button>`).join('');
 
+  // RENDER MATH IN ELEMENT FAIL-SAFE FOR STUDENT
+  if (typeof renderMathInElement === 'function') {
+    const delimiters = [
+      { left: '$$', right: '$$', display: true },
+      { left: '$', right: '$', display: false },
+      { left: '\\(', right: '\\)', display: false },
+      { left: '\\[', right: '\\]', display: true }
+    ];
+    if (textEl) renderMathInElement(textEl, { delimiters });
+    if (optsEl) renderMathInElement(optsEl, { delimiters });
+  }
+
   // Temporizador
   if (timerEl) { timerEl.textContent = remaining; timerEl.style.color = ''; }
   if (slqTimerInterval) clearInterval(slqTimerInterval);
@@ -3981,6 +4103,15 @@ function slqRevealCorrectAnswer(correctIdx) {
   if (answeredPanel && !answeredPanel.classList.contains('hidden')) {
     text.innerHTML = lqProcessText(answer);
     rev.classList.remove('hidden');
+    if (typeof renderMathInElement === 'function') {
+      const delimiters = [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '\\[', right: '\\]', display: true }
+      ];
+      renderMathInElement(text, { delimiters });
+    }
   }
 }
 
