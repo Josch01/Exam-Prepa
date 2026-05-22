@@ -927,9 +927,7 @@ function renderQuestion() {
       { left: '\\(', right: '\\)', display: false }
     ];
     renderMathInElement(document.getElementById('question-text'), { delimiters });
-    document.querySelectorAll('#options-list .option-btn span:last-child').forEach(el => {
-      renderMathInElement(el, { delimiters });
-    });
+    renderMathInElement(document.getElementById('options-list'), { delimiters });
   }
 
   const fb = document.getElementById('feedback-box');
@@ -1002,10 +1000,22 @@ function confirmAnswer() {
     fb.innerHTML = `
       <span class="feedback-icon"><i data-lucide="x-circle" class="w-8 h-8 text-red-400"></i></span>
       <div>
-        <span>Incorrecto. La respuesta correcta era: <strong>${letters[q.correct]}. ${correctText}</strong></span>
+        <span>Incorrecto. La respuesta correcta era: <strong>${letters[q.correct]}. ${formatLatexText(correctText)}</strong></span>
         ${justHTML}
       </div>`;
   }
+
+  // Renderizar matemáticas de forma automática en la retroalimentación (KaTeX)
+  if (typeof renderMathInElement === 'function') {
+    const delimiters = [
+      { left: '$$', right: '$$', display: true },
+      { left: '\\[', right: '\\]', display: true },
+      { left: '$', right: '$', display: false },
+      { left: '\\(', right: '\\)', display: false }
+    ];
+    renderMathInElement(fb, { delimiters });
+  }
+
   document.getElementById('exam-score-live').textContent = `✅ ${examState.correct} / ❌ ${examState.wrong}`;
 
   // Marcar como contestada y quitar de flagged
